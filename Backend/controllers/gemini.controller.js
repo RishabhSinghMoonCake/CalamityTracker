@@ -1,8 +1,9 @@
-import { GoogleGenAI } from "@google/genai"; // Corrected import for generative-ai
-import axios from "axios";
-// The client gets the API key from the environment variable `GEMINI_API_KEY`.
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }); // Renamed 'ai' to 'genAI' for clarity
 
+import express from 'express';
+import { GoogleGenAI } from "@google/genai";
+import axios from "axios";
+
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function fetchNews() {
   try {
@@ -28,7 +29,7 @@ async function fetchNews() {
         const url = `${process.env.NEWS_API_URL}?apikey=${process.env.NEWS_API_KEY}&q=${encodeURIComponent(query)}`;
         try {
           const response = await axios.get(url);
-          return response.data; // ✅ this is where 'status' and 'results' live
+          return response.data;
         } catch (error) {
           console.warn(`Failed to fetch for "${query}": ${error.message}`);
           return null;
@@ -42,24 +43,22 @@ async function fetchNews() {
       if (!data || data.status !== "success" || !Array.isArray(data.results)) continue;
 
       for (const item of data.results) {
-        const {
-          link,
-          pubDate,
-          country,
-          content,
-          title
-        } = item;
+        const { link, pubDate, country, title, description } = item;
+        if (!link || !pubDate || !country || !title) continue;
+
+        const [pub_date, pub_time = "00:00:00"] = pubDate.split(" ");
 
         output.push({
           link,
-          pub_date: pubDate.split(" ")[0],
-          pub_time: pubDate.split(" ")[1],
-          location_country: country?.[0] || "unknown",
-          content: title || ""
+          pub_date,
+          pub_time,
+          location_country: country[0] || "unknown",
+          content: `${title}. ${description || ""}`
         });
       }
     }
 
+    console.log(`✅ Total filtered articles: ${output.length}`);
     return output;
 
   } catch (error) {
@@ -68,13 +67,12 @@ async function fetchNews() {
   }
 }
 
+async function main(req, res) {
+  const articlesInput = await fetchNews();
 
-
-async function main() {
-  const articlesInput = await fetchNews().catch(console.error);
-  if(articlesInput.length === 0) {
-    console.log("No articles found.");
-    return;
+  if (!articlesInput || articlesInput.length === 0) {
+    console.log("⚠️ No articles found or parsed.");
+    return res.json({ data: "[]" });
   }
 
   const prompt = `You are an expert news analyst specializing in identifying and cataloging global calamities and disasters. Your task is to review a given array of news article details. For each article, you must determine if it describes a natural or man-made calamity or disaster (e.g., earthquake, flood, hurricane, wildfire, major industrial accident, terrorist attack, widespread disease outbreak, etc.).
@@ -89,64 +87,28 @@ If an article *does* correspond to a calamity or disaster, you must:
     * \`disaster_location\`: The extracted specific location of the disaster.
     * \`article_link\`: The original link to the article.
     * \`disaster_datetime\`: The most accurate date and time of the disaster, formatted as "YYYY-MM-DD HH:MM:SS" (or "YYYY-MM-DD" if time is not available).
+    * \`disaster_type\`: A short description of the type of disaster (e.g., "flood", "earthquake", etc.)
 
-**Input Format:**
+Only return the filtered array of disaster-related JSON objects. Do not include any other output or explanation. If no article qualifies, return an empty array \`[]\`.
 
-You will receive an array of JSON objects, where each object represents a news article with the following structure:
-
+Articles:
 \`\`\`json
-[
-  {
-    "link": "https://example.com/news/article1",
-    "pub_date": "2025-07-19",
-    "pub_time": "10:30:00",
-    "location_country": "USA"
-  },
-  {
-    "link": "https://example.com/news/article2",
-    "pub_date": "2025-07-20",
-    "pub_time": "14:15:00",
-    "location_country": "Japan"
-  }
-]
+${JSON.stringify(articlesInput, null, 2)}
 \`\`\`
-
-**Output Format:**
-
-Your output must be a single JSON array containing only the filtered articles, each formatted as described above. Do not include any additional text or explanations outside of the JSON array. If no articles correspond to a disaster, return an empty JSON array \`[]\`.
-
-**Example Output (Illustrative - you will populate this based on article content):**
-
-\`\`\`json
-[
-  {
-    "disaster_location": "Lahaina, Maui, Hawaii",
-    "article_link": "https://example.com/news/article1",
-    "disaster_datetime": "2025-07-18 23:00:00",
-    "disaster_type": "wildfire"
-  },
-  {
-    "disaster_location": "Kyoto, Japan",
-    "article_link": "https://example.com/news/article2",
-    "disaster_datetime": "2025-07-20",
-    "disaster_type": "earthquake"
-  }
-]
-\`\`\`
-
-**Instructions for the AI:**
-
-Process the following array of news articles, making sure to fetch content from the provided links for analysis and only return articles that correspond to a calamity or disaster. Ensure that the \`disaster_location\` is as specific as possible, and the \`disaster_datetime\` is formatted correctly. If an article does not describe a calamity or disaster, do not include it in the output.:
-
-${JSON.stringify(articlesInput)}
 `;
 
-  const result = await genAI.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt
-  });
-  const text = result.text;
-  console.log(text);
+  try {
+
+     const result = await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt
+    });
+    const text = result.text;
+    res.json({data:text.trim()});
+  } catch (err) {
+    console.error("❌ Gemini generation failed:", err);
+    return res.status(500).json({ error: "Gemini generation failed" });
+  }
 }
 
 export default main;

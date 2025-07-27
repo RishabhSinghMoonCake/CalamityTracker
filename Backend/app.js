@@ -1,21 +1,22 @@
 import express from 'express';
 import connectDB from './db/db.js';
 import axios from 'axios';
-import main from './Gemini/gemini.js';
+import main from './controllers/gemini.controller.js';
+import cors from 'cors';
+import router from './routes/maps.routes.js';
+import apiRouter from './routes/apiRoutes.js';
 const app = express();
 
 // Middleware to parse JSON requests
 app.use(express.json());
 
+//middlewares
+app.use(cors());
+
 //connect to MongoDB
 connectDB();
 
-
-
-app.get('/', (req, res) => {
-  //fetchNews().catch(console.error);
-  main();
-  res.send('Hello, World!');
-});
+app.use('/maps' , router)
+app.use('/api', apiRouter);
 
 export default app;

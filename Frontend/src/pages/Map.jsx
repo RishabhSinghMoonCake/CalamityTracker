@@ -3,6 +3,7 @@ import * as maptilersdk from '@maptiler/sdk';
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 import './Map.css';
 import axios from 'axios';
+import {TrophySpin} from 'react-loading-indicators'
 
 
 const Map = () => {
@@ -11,12 +12,13 @@ const Map = () => {
   maptilersdk.config.apiKey = import.meta.env.VITE_TILE_MAPS_API_KEY;
   const [userLoc, setUserLoc] = useState('');
   const [result, setResult] = useState(null);
+  const [markers, setMarkers] = useState([])
   const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
   const userMarkerRef = useRef(null);
 
-  async function addMarker(lat, lng, markerColor="#FF0000", markerTitle="Marker", markerDescription="This is an interactive marker!") {
-    if (!map.current) return null; // Return null if map is not ready
+  function addMarker(lat, lng, markerColor="#FF0000", markerTitle="Marker", markerDescription="This is an interactive marker!") {
+    if (!map.current) return null; 
 
     const marker = new maptilersdk.Marker({color: markerColor})
       .setLngLat([lng, lat])
@@ -32,13 +34,80 @@ const Map = () => {
         .setHTML(`<h3>${markerTitle}</h3><p>${markerDescription}</p>`)
         .addTo(map.current);
     });
-    return marker; // Make sure to return the marker instance
+    return marker; 
   }
+
+function getDistance(lat1, lon1, lat2, lon2) {
+  const toRad = (value) => (value * Math.PI) / 180;
+
+  const R = 6371; // Radius of Earth in km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; 
+}
+
+async function findNearestDisaster(userLat, userLong) {
+  let nearest = null;
+  let minDistance = Infinity
+
+  for (const marker of markers) {
+    const dist = getDistance(userLat, userLong, marker.lat, marker.lng)
+    if(dist < minDistance)
+    {
+      minDistance = dist
+      nearest = marker
+    }
+  }
+
+  if (nearest) {
+    const lineGeoJSON = {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [userLong, userLat],
+          [nearest.lng, nearest.lat]
+        ]
+      }
+    };
+
+    if (map.current.getSource('line-connection')) {
+      map.current.getSource('line-connection').setData(lineGeoJSON);
+    } else {
+      map.current.addSource('line-connection', {
+        type: 'geojson',
+        data: lineGeoJSON
+      });
+
+      map.current.addLayer({
+        id: 'line-connection-layer',
+        type: 'line',
+        source: 'line-connection',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': '#49006bff',
+          'line-width': 4
+        }
+      });
+    }
+
+  }
+}
+
 
   async function handleSearch() {
     if (!userLoc || userLoc.length < 3) return;
 
-    // Geocode user location and update map view
     try {
       const response = await fetch(`${backendUrl}/maps/get-coordinates?address=${userLoc}`);
       if (!response.ok) {
@@ -48,11 +117,14 @@ const Map = () => {
       if (data) {
         const { lng, lat } = data;
         map.current.setCenter([lng, lat]);
+        map.current.setZoom(3)
         if(userMarkerRef.current) {
-          userMarkerRef.current.remove(); // This should work if current is a marker instance
+          userMarkerRef.current.remove(); 
         }
         userMarkerRef.current = await addMarker(lat, lng, "#00FF00", "User Location", `You searched for: ${userLoc}`);
-        setUserLoc(''); // Clear input after search
+        findNearestDisaster(lat,lng)
+        
+        setUserLoc('');
       }
     } catch (error) {
       console.error('Error fetching coordinates:', error);
@@ -74,6 +146,8 @@ const Map = () => {
         `${disaster_type.toUpperCase()} - ${new Date(disaster_datetime).toLocaleString()}`,
         `<a href="${article_link}" target="_blank">Read more</a><br/>Location: ${disaster_location}`
       );
+      setMarkers((m)=>m=[...m, {lat,lng, disaster_location}])
+
     } catch (err) {
       console.error(`Failed to geocode or add marker for: ${disaster_location}`, err);
     }
@@ -82,17 +156,16 @@ const Map = () => {
 
   async function setData(dataStr) {
     try {
-      // Remove markdown formatting like ```json\n and trailing ```
       console.log('datastr: ' , dataStr)
       const cleaned = dataStr
-        .replace(/^```json\s*/, '')  // remove leading ```json\n
-        .replace(/```$/, '')         // remove trailing ```
-        .trim();                     // trim whitespace
+        .replace(/^```json\s*/, '')  
+        .replace(/```$/, '')         
+        .trim();
       console.log('cleaned: ', cleaned)
 
       const parsed = JSON.parse(cleaned);
       console.log('parsed : ' , parsed)
-      setResult(parsed); // Store parsed result if needed
+      setResult(parsed); 
 
       for (const item of parsed) {
         console.log('item: ' ,item)
@@ -130,9 +203,8 @@ const Map = () => {
       else
       {
         const response = await axios.get(`${backendUrl}/api/calamities`);
-        // axios returns the data directly
         const data = response.data;
-        setData(data.data); // setResult to the actual object
+        setData(data.data);
         console.log('result :', data);
       }
 
@@ -146,7 +218,7 @@ const Map = () => {
   }
 
   useEffect(() => {
-    if (map.current) return; // stops map from intializing more than once
+    if (map.current) return;
     
     map.current = new maptilersdk.Map({
       container: mapContainer.current,
@@ -163,14 +235,19 @@ const Map = () => {
       {
         !result?
         <div className="loading-screen">
-          Loading...
+          <div className="spin-loader">
+            {
+              <TrophySpin className='spin-loader' color="#ffe655ff" size="large" text="Fetching Live Disasters" textColor="#ff0000ff" />
+            }
+          </div>
+          
         </div>
         :<></>
       }
       
       <div ref={mapContainer} className="map" />
       <div className="search-bar">
-        <input  onChange={(e) => setUserLoc(e.target.value)} value={userLoc} type="text" placeholder='Enter Location' />
+        <input  onChange={(e) => setUserLoc(e.target.value)} value={userLoc} type="text" placeholder='Enter city' />
         <button onClick={handleSearch}>Search</button>
       </div>
     </div>

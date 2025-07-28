@@ -43,3 +43,33 @@ export async function getAutocompleteSuggestions(req, res) {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 }
+
+export async function distanceBetween(req,res)
+{
+  const { origin, destination } = req.query;
+  if(!origin || !destination) return res.json({error:'all fields are required'})
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  const url = 'https://maps.googleapis.com/maps/api/distancematrix/json';
+
+  try {
+    const response =await axios.get(url, {
+  params: {
+    origins: origin,
+    destinations: destination,
+    key: apiKey
+  }
+})
+    const data =  response.data
+    if(data.rows[0].elements[0])
+    {
+      res.json({distance:data.rows[0].elements[0].distance.value})
+    }
+    else
+    {
+      res.json({error:'address error'})
+    }
+  } catch (error) {
+    res.json({error:error})
+  }
+
+}

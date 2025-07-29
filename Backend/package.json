@@ -12,9 +12,11 @@
   "type": "module",
   "dependencies": {
     "@google/genai": "^1.10.0",
+    "autocannon": "^8.0.0",
     "axios": "^1.10.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",
-    "mongoose": "^8.16.4"
+    "mongoose": "^8.16.4",
+    "morgan": "^1.10.1"
   }
 }

@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI).then(()=>{
+    await mongoose.connect(process.env.MONGODB_KEY).then(()=>{
       console.log("MongoDB connection established successfully");
     });
   } catch (error) {

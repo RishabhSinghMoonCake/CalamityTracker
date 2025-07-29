@@ -4,7 +4,7 @@ import "@maptiler/sdk/dist/maptiler-sdk.css";
 import './Map.css';
 import axios from 'axios';
 import {TrophySpin} from 'react-loading-indicators'
-
+import {ToastContainer, toast} from 'react-toastify'
 
 const Map = () => {
   const mapContainer = useRef(null);
@@ -67,6 +67,7 @@ async function findNearestDisaster(userLat, userLong) {
   }
 
   if (nearest) {
+    toast.info(`You are ${minDistance} km away from nearest disaster`)
     const lineGeoJSON = {
       type: 'Feature',
       geometry: {
@@ -156,19 +157,15 @@ async function findNearestDisaster(userLat, userLong) {
 
   async function setData(dataStr) {
     try {
-      console.log('datastr: ' , dataStr)
       const cleaned = dataStr
         .replace(/^```json\s*/, '')  
         .replace(/```$/, '')         
         .trim();
-      console.log('cleaned: ', cleaned)
 
       const parsed = JSON.parse(cleaned);
-      console.log('parsed : ' , parsed)
       setResult(parsed); 
 
       for (const item of parsed) {
-        console.log('item: ' ,item)
         try{
           await axios.post(`${backendUrl}/api/add-calamity-db`, {
             disaster_datetime: item.disaster_datetime,
@@ -190,6 +187,30 @@ async function findNearestDisaster(userLat, userLong) {
 
   async function fetchResults() {
     try {
+
+      //now getting disasters from nasa api
+      const res = await axios.get('https://eonet.gsfc.nasa.gov/api/v3/events?days=20&status=open')
+      if(res.data)
+      {
+        for(const item of res.data.events)
+        {
+          const lat = item.geometry[0].coordinates[1];
+          const lng = item.geometry[0].coordinates[0]
+          const disaster_type = item.categories[0].id || item.categories[0].markerTitle
+          const article_link = item.sources[0].url;
+          const disaster_location = "From Nasa open API-Open Link"
+          const disaster_datetime = item.geometry[0].date
+          await addMarker(
+            lat,
+            lng,
+            "#fffb00ff",
+            `${disaster_type.toUpperCase()} - ${new Date(disaster_datetime).toLocaleString()}`,
+            `<a href="${article_link}" target="_blank">Read more</a><br/>Location: ${disaster_location}`
+          );
+          setMarkers((m)=>m=[...m, {lat,lng, disaster_location}])
+        }
+      }
+
       const dbResponse = await axios.get(`${backendUrl}/api/get-calamities-db`);
       if(dbResponse.data && dbResponse.data.length > 0) 
       {
@@ -198,14 +219,15 @@ async function findNearestDisaster(userLat, userLong) {
         setResult(disasters)
         for (const disaster of disasters) {
           await geocodeAndAddDisasterMarker(disaster);
-        } 
+        }
+        
+        
       }
       else
       {
         const response = await axios.get(`${backendUrl}/api/calamities`);
         const data = response.data;
         setData(data.data);
-        console.log('result :', data);
       }
 
 
@@ -225,7 +247,6 @@ async function findNearestDisaster(userLat, userLong) {
       style: maptilersdk.MapStyle.LANDSCAPE,
       center: [78.9629,20.5937]
     });
-    console.log('fetching results');
     fetchResults();
   }, [result]);
 
@@ -246,9 +267,11 @@ async function findNearestDisaster(userLat, userLong) {
       }
       
       <div ref={mapContainer} className="map" />
+      
       <div className="search-bar">
         <input  onChange={(e) => setUserLoc(e.target.value)} value={userLoc} type="text" placeholder='Enter city' />
         <button onClick={handleSearch}>Search</button>
+        
       </div>
     </div>
   );

@@ -17,6 +17,10 @@
   pointer-events: auto ;
 }
 
+.maplibregl-popup{
+  z-index: 2000;
+}
+
 .search-bar{
   position: absolute;
   z-index: 10000;

@@ -82,7 +82,7 @@ Core ideas and systems are being tested, refined, and expanded.
 ## 👨‍💻 Developer
 
 **Rishabh Singh**
-CSE Undergraduate @ IIIT Guwahati
+CSE Undergraduate
 Aspiring Software Engineer | Indie Game Developer
 
 ---

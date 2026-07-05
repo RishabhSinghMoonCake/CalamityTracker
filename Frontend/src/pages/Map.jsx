@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, use } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import * as maptilersdk from '@maptiler/sdk';
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 import './Map.css';
@@ -9,7 +9,7 @@ import {ToastContainer, toast} from 'react-toastify'
 const Map = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
-  maptilersdk.config.apiKey = import.meta.env.VITE_TILE_MAPS_API_KEY;
+  maptilersdk.config.apiKey = import.meta.env.VITE_MAPTILER_API_KEY;
   const [userLoc, setUserLoc] = useState('');
   const [result, setResult] = useState(null);
   const [markers, setMarkers] = useState([])
@@ -18,6 +18,7 @@ const Map = () => {
   const userMarkerRef = useRef(null);
 
   function addMarker(lat, lng, markerColor="#FF0000", markerTitle="Marker", markerDescription="This is an interactive marker!") {
+    console.log("Backend URL:", backendUrl);
     if (!map.current) return null; 
 
     const marker = new maptilersdk.Marker({color: markerColor})
@@ -134,26 +135,6 @@ async function findNearestDisaster(userLat, userLong) {
 
   }
 
-  async function geocodeAndAddDisasterMarker(disaster) {
-    const { disaster_location, article_link, disaster_datetime, disaster_type } = disaster;
-    try {
-      const res = await axios.get(`${backendUrl}/maps/get-coordinates?address=${encodeURIComponent(disaster_location)}`);
-      const { lat, lng } = res.data;
-
-      await addMarker(
-        lat,
-        lng,
-        "#FF5733",
-        `${disaster_type.toUpperCase()} - ${new Date(disaster_datetime).toLocaleString()}`,
-        `<a href="${article_link}" target="_blank">Read more</a><br/>Location: ${disaster_location}`
-      );
-      setMarkers((m)=>m=[...m, {lat,lng, disaster_location}])
-
-    } catch (err) {
-      console.error(`Failed to geocode or add marker for: ${disaster_location}`, err);
-    }
-  }
-
 
   async function setData(dataStr) {
     try {
@@ -187,55 +168,73 @@ async function findNearestDisaster(userLat, userLong) {
 
   async function fetchResults() {
     try {
+      try {
+        const res = await axios.get(
+          "https://eonet.gsfc.nasa.gov/api/v3/events?days=20&status=open"
+        );
 
-      //now getting disasters from nasa api
-      const res = await axios.get('https://eonet.gsfc.nasa.gov/api/v3/events?days=20&status=open')
-      if(res.data)
-      {
-        for(const item of res.data.events)
-        {
-          const lat = item.geometry[0].coordinates[1];
-          const lng = item.geometry[0].coordinates[0]
-          const disaster_type = item.categories[0].id || item.categories[0].markerTitle
-          const article_link = item.sources[0].url;
-          const disaster_location = "From Nasa open API-Open Link"
-          const disaster_datetime = item.geometry[0].date
-          await addMarker(
-            lat,
-            lng,
-            "#fffb00ff",
-            `${disaster_type.toUpperCase()} - ${new Date(disaster_datetime).toLocaleString()}`,
-            `<a href="${article_link}" target="_blank">Read more</a><br/>Location: ${disaster_location}`
-          );
-          setMarkers((m)=>m=[...m, {lat,lng, disaster_location}])
+        if (res.data) {
+          for (const item of res.data.events) {
+            const lat = item.geometry[0].coordinates[1];
+            const lng = item.geometry[0].coordinates[0];
+            const disaster_type =
+              item.categories[0].id || item.categories[0].title;
+            const article_link = item.sources[0].url;
+            const disaster_location = "From NASA Open API";
+            const disaster_datetime = item.geometry[0].date;
+
+            await addMarker(
+              lat,
+              lng,
+              "#fffb00",
+              `${disaster_type.toUpperCase()} - ${new Date(
+                disaster_datetime
+              ).toLocaleString()}`,
+              `<a href="${article_link}" target="_blank">Read more</a><br/>Location: ${disaster_location}`
+            );
+
+            setMarkers((m) => [...m, { lat, lng, disaster_location }]);
+          }
         }
+      } catch (err) {
+        console.log("NASA API failed, continuing...");
       }
 
-      const dbResponse = await axios.get(`${backendUrl}/api/get-calamities-db`);
-      if(dbResponse.data && dbResponse.data.length > 0) 
-      {
+      const dbResponse = await axios.get(
+        `${backendUrl}/api/get-calamities-db`
+      );
+
+      if (dbResponse.data && dbResponse.data.length > 0) {
         const disasters = dbResponse.data;
+        setResult(disasters);
 
-        setResult(disasters)
         for (const disaster of disasters) {
-          await geocodeAndAddDisasterMarker(disaster);
+          await addMarker(
+            disaster.lat,
+            disaster.lng,
+            "#FF5733",
+            `${disaster.disaster_type.toUpperCase()} - ${new Date(disaster.disaster_datetime).toLocaleString()}`,
+            `<a href="${disaster.article_link}" target="_blank">Read more</a><br/>Location: ${disaster.disaster_location}`
+          );
+
+          setMarkers((m) => [
+            ...m,
+            {
+              lat: disaster.lat,
+              lng: disaster.lng,
+              disaster_location: disaster.disaster_location
+            }
+          ]);
         }
-        
-        
-      }
-      else
-      {
+      } else {
         const response = await axios.get(`${backendUrl}/api/calamities`);
         const data = response.data;
+
         setData(data.data);
       }
-
-
-      
     } catch (error) {
-      console.error('Error fetching results:', error);
-      setResult(null);
-      
+      console.error("Error fetching results:", error);
+      setResult([]);
     }
   }
 
@@ -248,7 +247,7 @@ async function findNearestDisaster(userLat, userLong) {
       center: [78.9629,20.5937]
     });
     fetchResults();
-  }, [result]);
+  }, []);
 
 
   return (
@@ -267,12 +266,6 @@ async function findNearestDisaster(userLat, userLong) {
       }
       
       <div ref={mapContainer} className="map" />
-      
-      <div className="search-bar">
-        <input  onChange={(e) => setUserLoc(e.target.value)} value={userLoc} type="text" placeholder='Enter city' />
-        <button onClick={handleSearch}>Search</button>
-        
-      </div>
     </div>
   );
 }

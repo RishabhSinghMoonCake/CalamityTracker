@@ -1,18 +1,30 @@
 import mongoose from "mongoose";
 
 const disasterSchema = new mongoose.Schema({
-  disaster_location: { type: String, required: true },
-  article_link: { type: String, required: true },
-  disaster_datetime: { type: Date, required: true },
-  disaster_type: { type: String, required: true },
-  createdAt: {
+  disaster_location: {
+    type: String,
+    required: true
+  },
+  article_link: {
+    type: String,
+    required: true
+  },
+  disaster_datetime: {
     type: Date,
-    default: Date.now,
-    expires: 60*60 * 5 
+    required: true
+  },
+  disaster_type: {
+    type: String,
+    required: true
+  },
+  lat: {
+    type: Number,
+    required: true
+  },
+  lng: {
+    type: Number,
+    required: true
   }
 });
 
-
-const Disaster = mongoose.model("Disaster", disasterSchema);
-
-export default Disaster;
+export default mongoose.model("Disaster", disasterSchema);

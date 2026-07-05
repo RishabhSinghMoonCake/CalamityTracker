@@ -12,7 +12,12 @@ app.use(cors());
 
 //connect to MongoDB
 connectDB();
-
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime()
+  });
+});
 app.use('/maps' , router)
 app.use('/api', apiRouter);
 

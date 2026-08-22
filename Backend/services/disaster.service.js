@@ -5,109 +5,69 @@ const genAI = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY
 });
 
-async function fetchNews() {
-  try {
-    const keywords = [
-      "flood",
-      "earthquake",
-      "wildfire",
-      "hurricane OR typhoon OR cyclone OR tropical storm",
-      "volcano",
-      "landslide",
-      "disease outbreak",
-      "industrial accident",
-      "major accident",
-      "transport accident",
-      "active shooter",
-      "terrorist attack",
-      "mass casualty",
-      "war",
-      "missile",
-      "attack"
-    ];
+export async function fetchNews() {
+    const queries = [
+    "flood OR earthquake OR wildfire OR landslide",
+    "cyclone OR hurricane OR typhoon OR storm  OR war",
+    "volcanic eruption OR tsunami OR major accident OR attack"
+  ];
 
-    const allResponses = [];
+  const articlesByUrl = new Map();
 
-    for (const query of keywords) {
-      const url = `${process.env.NEWS_API_URL}?apikey=${process.env.NEWS_API_KEY}&q=${encodeURIComponent(query)}`;
+  for(const query of queries)
+  {
+    try{
+      const response = await axios.get(process.env.NEWS_API_URL,{
+        params:{
+          apiKey: process.env.NEWS_API_KEY,
+          q: query
+        },
+        timeout: 10000
+      });
 
-      try {
-        const response = await axios.get(url);
-        allResponses.push(response.data);
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-      } catch (error) {
-        console.warn(`Failed for "${query}": ${error.message}`);
-      }
-    }
+      const articles = response.data?.results;
 
-    const output = [];
-
-    for (const data of allResponses) {
-      if (!data || data.status !== "success" || !Array.isArray(data.results)) {
+      if(!Array.isArray(articles)){
+        console.warn(`No valid results returned for query: "${query}"`);
         continue;
       }
 
-      for (const item of data.results) {
-        const { link, pubDate, country, title, description } = item;
+      for(const item of articles)
+      {
+        if(!item.link || !item.title || !item.pubDate) continue;
+        //the provider gives a UTC time wihout T or Z
+        const publishedAt = new Date(
+          `${item.pubDate.replace(" ", "T")}Z`
+        );
 
-        if (!link || !pubDate || !country || !title) continue;
+        if(Number.isNaN(publishedAt.getTime())){
+          console.warn(`Skipped article with invalid date: ${item.link}`);
+          continue;
+        }
 
-        const [pub_date, pub_time = "00:00:00"] = pubDate.split(" ");
-
-        output.push({
-          link,
-          pub_date,
-          pub_time,
-          location_country: country[0] || "unknown",
-          content: `${title}. ${description || ""}`
+        articlesByUrl.set(item.link, {
+          source: "newsdata",
+          sourceArticleId: item.article_id || null,
+          canonicalUrl: item.link,
+          title: item.title.trim(),
+          description: item.description?.trim() || "",
+          publishedAt,
+          country: item.country?.[0] || "unknown",
+          rawPayload: item
         });
+
       }
+
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    } catch(error){
+      console.warn(`News request failed for "${query}": ${error.message}`);
     }
-
-    const uniqueOutput = Array.from(
-      new Map(output.map((item) => [item.link, item])).values()
-    );
-
-    const strongSignals = [
-      "dead",
-      "killed",
-      "injured",
-      "evacuated",
-      "flood",
-      "earthquake",
-      "wildfire",
-      "landslide",
-      "eruption",
-      "outbreak",
-      "explosion",
-      "collapsed",
-      "storm",
-      "cyclone",
-      "attack",
-      "missile",
-      "war"
-    ];
-
-    const filteredOutput = uniqueOutput.filter((article) =>
-      strongSignals.some((signal) =>
-        article.content.toLowerCase().includes(signal)
-      )
-    );
-
-    filteredOutput.sort(
-      (a, b) =>
-        new Date(`${b.pub_date} ${b.pub_time}`) -
-        new Date(`${a.pub_date} ${a.pub_time}`)
-    );
-
-    console.log(`Fetched ${uniqueOutput.length} unique news articles`);
-    console.log(`Filtered to ${filteredOutput.length} strong disaster candidates`);
-
-    return filteredOutput.slice(0, 60);
-  } catch (error) {
-    console.error("Error fetching news:", error.message);
-    return [];
   }
+
+  const normalizedArticles = [...articlesByUrl.values()].sort((a,b)=>b.publishedAt-a.publishedAt);
+
+  console.log(`Fetched and normalized ${normalizedArticles.length} unique articles`);
+  return normalizedArticles;
 }
 
 export async function getProcessedDisasters() {

@@ -33,7 +33,7 @@ const rawArticleSchema = new mongoose.Schema(
     },
     country:{
       type:String,
-      defualt:"Unknown",
+      default:"unknown",
       trim: true
     },
     rawPayload:{

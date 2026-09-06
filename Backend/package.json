@@ -4,7 +4,11 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "dev": "node --watch --env-file=.env server.js"
+    "dev": "node --watch --env-file=.env server.js",
+    "test": "node --test",
+    "benchmark:incidents": "node --env-file=.env scripts/benchmark-incidents.js",
+    "queues:status": "node --env-file=.env scripts/queue-status.js",
+    "worker": "node --watch --env-file=.env workers/worker.js"
   },
   "keywords": [],
   "author": "",
@@ -14,11 +18,18 @@
     "@google/genai": "^1.10.0",
     "autocannon": "^2.0.1",
     "axios": "^1.10.0",
+    "bullmq": "^6.3.4",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "ioredis": "^6.0.0",
     "mongodb": "^7.4.0",
     "mongoose": "^8.16.4",
     "morgan": "^1.10.1",
-    "redis": "^6.2.1"
+    "redis": "^6.2.1",
+    "uuid": "^14.0.2"
+  },
+  "devDependencies": {
+    "supertest": "^7.2.2",
+    "vitest": "^5.0.0"
   }
 }

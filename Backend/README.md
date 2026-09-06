@@ -5,11 +5,14 @@ An event-driven backend for collecting disaster-related news, classifying it wit
 ## What is implemented
 
 ```text
-NewsData API
+BullMQ scheduler (Redis)
+  -> NewsData API
   -> RawArticle (deduplicated source evidence)
-  -> Gemini AI extraction (auditable classification)
-  -> GeocodeCache (cached location lookup)
+  -> targeted Gemini AI job
+  -> AiExtraction (auditable classification)
+  -> cached Nominatim geocoding
   -> Incident (GeoJSON map record with evidence links)
+  -> Redis cache invalidation
   -> GET /api/incidents
 ```
 
@@ -22,7 +25,8 @@ The pipeline intentionally separates a source article from an incident. Several 
 - Gemini via `@google/genai`
 - NewsData API
 - Nominatim/OpenStreetMap geocoding
-- Redis package installed; response caching and background queues are next
+- Redis: incident-response cache and BullMQ job persistence
+- BullMQ + ioredis: scheduled ingestion, targeted AI processing, retries, and incident creation
 
 ## Run locally
 
@@ -33,6 +37,71 @@ npm run dev
 ```
 
 The server starts on `PORT` or port `5000` by default.
+
+Run the worker in a separate terminal when automation is enabled:
+
+```powershell
+npm run worker
+```
+
+The API server serves HTTP traffic. The worker performs external API calls and background processing. Keep them as separate processes.
+
+## Verify runtime health
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/health
+Invoke-RestMethod http://localhost:8000/api/ready
+npm run queues:status
+```
+
+- `/api/health` confirms the Node process is alive.
+- `/api/ready` returns `200` only when MongoDB and Redis are both available.
+- `queues:status` prints `waiting`, `active`, `completed`, `failed`, and `delayed` counts for every BullMQ queue.
+
+Expected steady-state behavior:
+
+```text
+delayed > 0     scheduled jobs are registered and awaiting their next run
+completed grows successful jobs have executed
+failed = 0      no jobs currently need investigation
+```
+
+Inspect worker-terminal logs for each job's ID, result, and failure reason. After an incident job completes, verify the map feed with `GET /api/incidents`.
+
+## Test and benchmark
+
+Run the automated suite:
+
+```powershell
+npm run test
+```
+
+The suite uses Node's built-in test runner and covers:
+
+- liveness and readiness endpoint contracts;
+- NewsData normalization and URL-based deduplication;
+- ingestion upsert operations and reported metrics;
+- Gemini response parsing and validation;
+- deterministic incident-cache keys; and
+- a real Redis ping plus cache-version invalidation primitive.
+
+The Redis integration test uses a unique temporary key and removes it afterward.
+
+Benchmark the cached incident endpoint with the backend running:
+
+```powershell
+npm run benchmark:incidents
+```
+
+Optional benchmark controls:
+
+```env
+BENCHMARK_CONNECTIONS=20
+BENCHMARK_DURATION_SECONDS=10
+BENCHMARK_URL=http://localhost:8000/api/incidents?status=candidate,active&limit=17
+```
+
+Record requests per second, average latency, p99 latency, and non-2xx responses. Run once after warming the Redis cache to measure the cached path.
 
 ## Environment variables
 
@@ -54,10 +123,27 @@ AI_BATCH_SIZE=3
 NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
 GEOCODING_USER_AGENT=CalamityTracker/1.0 (your-email@example.com)
 
-# Reserved for the Redis cache module
 REDIS_URL=redis://127.0.0.1:6379
 INCIDENTS_CACHE_TTL_SECONDS=60
+
+# BullMQ scheduling. Keep false until you intentionally allow external API use.
+PIPELINE_AUTOMATION_ENABLED=false
+NEWS_INGESTION_CRON=0 */6 * * *
+AI_PROCESSING_CRON=*/5 * * * *
 ```
+
+## Automation behavior
+
+When `PIPELINE_AUTOMATION_ENABLED=true` and `npm run worker` is running:
+
+1. BullMQ registers a NewsData job on `NEWS_INGESTION_CRON`.
+2. Ingestion stores only unseen articles and enqueues one `ai-processing` job per new article.
+3. Each AI job processes exactly its `rawArticleId`; worker concurrency is one.
+4. A scheduled AI batch handles previously pending records, capped by `AI_BATCH_SIZE`.
+5. A successful, mappable extraction enqueues one incident-creation job.
+6. The incident job geocodes, creates or merges the incident, then increments the Redis cache version.
+
+Jobs retry three times with exponential backoff. Completed jobs are retained for one day; failed jobs are retained for seven days.
 
 ## Data model
 
@@ -146,11 +232,29 @@ Create an incident with:
 - AI processing is bounded through `AI_BATCH_SIZE` and `AI_MAX_ATTEMPTS`.
 - News articles, AI output, and map incidents remain separately auditable.
 - Geocode results are cached to avoid repeat provider calls.
+- The incident API has observable Redis `X-Cache: HIT/MISS` headers.
+- Local warm-cache benchmark: 5,551 requests/sec, 3.08 ms average latency, 6 ms p99, zero errors, and zero timeouts. Re-run benchmarks after material changes; do not treat this local result as a production SLA.
+
+## Assumptions
+
+- MongoDB and Redis are running before the API server or worker starts.
+- NewsData, Gemini, and Nominatim credentials/usage are controlled through environment variables and provider limits.
+- Nominatim is appropriate for low-volume development use; use a production geocoding provider or self-hosted service before high-volume deployment.
+- AI output is a candidate signal, not verified public truth.
+- A report/extraction without trustworthy event geography is not eligible for a map incident.
+
+## Conventions
+
+- Source evidence is immutable: raw provider payloads are retained in `RawArticle`.
+- AI output is versioned by `model` and `promptVersion`; it never overwrites source evidence.
+- One `Incident` can aggregate multiple article/extraction evidence records.
+- Incident state uses `candidate`, `active`, `resolved`, and `rejected`; only a verification policy should promote a candidate to active.
+- GeoJSON coordinates are always `[longitude, latitude]`.
+- Queue job IDs use hyphens, not colons, to remain BullMQ-safe.
+- Workers own external processing; HTTP controllers should stay short and request-focused.
 
 ## Next improvements
 
-- Redis cache for `GET /api/incidents`, with `X-Cache: HIT/MISS` metrics.
-- BullMQ workers for ingestion, AI processing, retries, and dead-letter handling.
 - Auth and moderator workflows for candidate-to-active verification.
 - Community reports with geospatial clustering and confidence scoring.
 - WebSockets or SSE for live map updates.

@@ -2,6 +2,12 @@ import { createIncidentFromExtraction } from
   "../services/incidentCreation.service.js";
 
 import Incident from "../models/incident.model.js";
+import redisClient from "../config/redis.js";
+import { invalidateIncidentsCache } from "../services/incidentCache.service.js";
+
+export function buildIncidentCacheKey({ version, statuses, limit }) {
+  return `incidents:v${version}:status=${statuses.join(",")}:limit=${limit}`;
+}
 
 export async function createIncident(req, res) {
   try {
@@ -15,6 +21,10 @@ export async function createIncident(req, res) {
 
     const result = await createIncidentFromExtraction(extractionId);
 
+    if (result.created || result.merged) {
+      await invalidateIncidentsCache();
+    }
+
     return res.status(200).json(result);
   } catch (error) {
     console.error("Incident creation failed:", error.message);
@@ -27,6 +37,8 @@ export async function createIncident(req, res) {
 }
 
 export async function getIncidents(req, res) {
+  const startedAt = Date.now();
+
   try {
     const allowedStatuses = [
       "candidate",
@@ -39,20 +51,57 @@ export async function getIncidents(req, res) {
       ? req.query.status.split(",")
       : ["candidate", "active"];
 
-    const statuses = requestedStatuses.filter((status) =>
-      allowedStatuses.includes(status)
-    );
+    const statuses = [
+      ...new Set(
+        requestedStatuses.filter((status) =>
+          allowedStatuses.includes(status)
+        )
+      )
+    ].sort();
+
+    const finalStatuses = statuses.length
+      ? statuses
+      : ["active", "candidate"];
 
     const limit = Math.min(
       Math.max(Number(req.query.limit) || 100, 1),
       200
     );
 
+    let cacheKey;
+
+    try {
+      const cacheVersion =
+        (await redisClient.get("incidents:cache-version")) || "0";
+
+      cacheKey = buildIncidentCacheKey({
+        version: cacheVersion,
+        statuses: finalStatuses,
+        limit
+      });
+
+      const cachedResponse = await redisClient.get(cacheKey);
+
+      if (cachedResponse) {
+        return res
+          .set("X-Cache", "HIT")
+          .set(
+            "X-Response-Time",
+            `${Date.now() - startedAt}ms`
+          )
+          .status(200)
+          .json(JSON.parse(cachedResponse));
+      }
+    } catch (cacheError) {
+      console.warn(
+        "Incident cache read failed; using MongoDB:",
+        cacheError.message
+      );
+    }
+
     const incidents = await Incident.find({
       status: {
-        $in: statuses.length
-          ? statuses
-          : ["candidate", "active"]
+        $in: finalStatuses
       }
     })
       .sort({ lastUpdatedAt: -1 })
@@ -78,13 +127,41 @@ export async function getIncidents(req, res) {
       sources: incident.evidenceArticles
     }));
 
-    return res.status(200).json({
+    const responsePayload = {
       data: responseData,
       meta: {
         count: responseData.length,
-        statuses
+        statuses: finalStatuses
       }
-    });
+    };
+
+    try {
+      const ttlSeconds = Number(
+        process.env.INCIDENTS_CACHE_TTL_SECONDS || 60
+      );
+
+      await redisClient.set(
+        cacheKey,
+        JSON.stringify(responsePayload),
+        {
+          EX: ttlSeconds
+        }
+      );
+    } catch (cacheError) {
+      console.warn(
+        "Incident cache write failed:",
+        cacheError.message
+      );
+    }
+
+    return res
+      .set("X-Cache", "MISS")
+      .set(
+        "X-Response-Time",
+        `${Date.now() - startedAt}ms`
+      )
+      .status(200)
+      .json(responsePayload);
   } catch (error) {
     console.error("Failed to fetch incidents:", error.message);
 

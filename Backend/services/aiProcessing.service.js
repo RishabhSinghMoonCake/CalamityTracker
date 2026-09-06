@@ -4,7 +4,7 @@ import AiExtraction from "../models/aiExtraction.model.js";
 
 const MODEL_NAME = process.env.AI_MODEL_NAME
 const PROMPT_VERSION = process.env.AI_PROMPT_VERSION
-const MAX_ATTEMPTS = process.env.AI_MAX_ATTEMPTS
+const MAX_ATTEMPTS = Number(process.env.AI_MAX_ATTEMPTS || 3);
 
 const genAI = new GoogleGenAI({
   apiKey : process.env.GEMINI_API_KEY
@@ -14,7 +14,7 @@ function removeCodeFences(text){
   return text.replace(/```json|```/g, "").trim();
 }
 
-function parseExtraction(text){
+export function parseExtraction(text){
   const parsed = JSON.parse(removeCodeFences(text));
   if(typeof parsed.isDisaster !== "boolean"){
     throw new Error("AI response is missing a boolean isDisaster Field");
@@ -54,13 +54,15 @@ function parseExtraction(text){
   };
 }
 
-export async function processNextPendingArticle() {
+export async function processNextPendingArticle(rawArticleId = null) {
   const article = await RawArticle.findOneAndUpdate(
     {
+      ...(rawArticleId ? { _id: rawArticleId } : {}),
+
       $or: [
-        { status: "pending" }, //either pending
+        { status: "pending" },
         {
-          status: "failed", //or failed but attempts is less than max attempts
+          status: "failed",
           attempts: { $lt: MAX_ATTEMPTS }
         }
       ]
@@ -85,7 +87,9 @@ export async function processNextPendingArticle() {
   if (!article) {
     return {
       processed: false,
-      message: "No pending articles available"
+      message: rawArticleId
+        ? "Article is not eligible for processing"
+        : "No pending articles available"
     };
   }
 
@@ -151,7 +155,7 @@ ${JSON.stringify(
       ? "success"
       : "not_a_disaster";
 
-    await AiExtraction.create({
+    const extraction = await AiExtraction.create({
       rawArticleId: article._id,
       model: MODEL_NAME,
       promptVersion: PROMPT_VERSION,
@@ -170,7 +174,9 @@ ${JSON.stringify(
       articleId: article._id,
       articleTitle: article.title,
       status: article.status,
-      isDisaster: result.isDisaster
+      isDisaster: result.isDisaster,
+      extractionId: extraction._id.toString(),
+      locationName: result.locationName
     };
   } catch (error) {
     article.status = "failed";
@@ -181,8 +187,16 @@ ${JSON.stringify(
   }
 }
 
+export async function processArticleById(rawArticleId) {
+  if (!rawArticleId) {
+    throw new Error("rawArticleId is required");
+  }
 
-async function processPendingBatch() {
+  return processNextPendingArticle(rawArticleId);
+}
+
+
+export async function processPendingBatch() {
   const batchSize = Number(process.env.AI_BATCH_SIZE || 3);
   const results = [];
 
@@ -201,19 +215,4 @@ async function processPendingBatch() {
     processedCount: results.length,
     results
   };
-}
-
-export async function processArticleBatch(req, res) {
-  try {
-    const result = await processPendingBatch();
-
-    res.status(200).json(result);
-  } catch (error) {
-    console.error("AI batch processing failed:", error.message);
-
-    res.status(500).json({
-      message: "AI batch processing failed",
-      error: error.message
-    });
-  }
 }

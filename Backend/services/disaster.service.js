@@ -5,6 +5,47 @@ const genAI = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY
 });
 
+export function normalizeNewsResponses(allResponses) {
+  const articlesByUrl = new Map();
+
+  for (const data of allResponses) {
+    const articles = data?.results;
+
+    if (!Array.isArray(articles)) {
+      continue;
+    }
+
+    for (const item of articles) {
+      if (!item.link || !item.title || !item.pubDate) {
+        continue;
+      }
+
+      const publishedAt = new Date(
+        `${item.pubDate.replace(" ", "T")}Z`
+      );
+
+      if (Number.isNaN(publishedAt.getTime())) {
+        continue;
+      }
+
+      articlesByUrl.set(item.link, {
+        source: "newsdata",
+        sourceArticleId: item.article_id || null,
+        canonicalUrl: item.link,
+        title: item.title.trim(),
+        description: item.description?.trim() || "",
+        publishedAt,
+        country: item.country?.[0] || "unknown",
+        rawPayload: item
+      });
+    }
+  }
+
+  return [...articlesByUrl.values()].sort(
+    (a, b) => b.publishedAt - a.publishedAt
+  );
+}
+
 export async function fetchNews() {
     const queries = [
     "flood OR earthquake OR wildfire OR landslide",
@@ -12,51 +53,20 @@ export async function fetchNews() {
     "volcanic eruption OR tsunami OR major accident OR attack"
   ];
 
-  const articlesByUrl = new Map();
+  const allResponses = [];
 
   for(const query of queries)
   {
     try{
       const response = await axios.get(process.env.NEWS_API_URL,{
         params:{
-          apiKey: process.env.NEWS_API_KEY,
+          apikey: process.env.NEWS_API_KEY,
           q: query
         },
         timeout: 10000
       });
 
-      const articles = response.data?.results;
-
-      if(!Array.isArray(articles)){
-        console.warn(`No valid results returned for query: "${query}"`);
-        continue;
-      }
-
-      for(const item of articles)
-      {
-        if(!item.link || !item.title || !item.pubDate) continue;
-        //the provider gives a UTC time wihout T or Z
-        const publishedAt = new Date(
-          `${item.pubDate.replace(" ", "T")}Z`
-        );
-
-        if(Number.isNaN(publishedAt.getTime())){
-          console.warn(`Skipped article with invalid date: ${item.link}`);
-          continue;
-        }
-
-        articlesByUrl.set(item.link, {
-          source: "newsdata",
-          sourceArticleId: item.article_id || null,
-          canonicalUrl: item.link,
-          title: item.title.trim(),
-          description: item.description?.trim() || "",
-          publishedAt,
-          country: item.country?.[0] || "unknown",
-          rawPayload: item
-        });
-
-      }
+      allResponses.push(response.data);
 
       await new Promise((resolve) => setTimeout(resolve, 1200));
     } catch(error){
@@ -64,7 +74,7 @@ export async function fetchNews() {
     }
   }
 
-  const normalizedArticles = [...articlesByUrl.values()].sort((a,b)=>b.publishedAt-a.publishedAt);
+  const normalizedArticles = normalizeNewsResponses(allResponses);
 
   console.log(`Fetched and normalized ${normalizedArticles.length} unique articles`);
   return normalizedArticles;

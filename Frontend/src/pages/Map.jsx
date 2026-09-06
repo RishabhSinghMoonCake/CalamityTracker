@@ -6,6 +6,34 @@ import axios from 'axios';
 import {TrophySpin} from 'react-loading-indicators'
 import {ToastContainer, toast} from 'react-toastify'
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    };
+
+    return entities[character];
+  });
+}
+
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(value);
+
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.href;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const Map = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -18,7 +46,6 @@ const Map = () => {
   const userMarkerRef = useRef(null);
 
   function addMarker(lat, lng, markerColor="#FF0000", markerTitle="Marker", markerDescription="This is an interactive marker!") {
-    console.log("Backend URL:", backendUrl);
     if (!map.current) return null; 
 
     const marker = new maptilersdk.Marker({color: markerColor})
@@ -32,7 +59,7 @@ const Map = () => {
       e.stopPropagation();
       new maptilersdk.Popup()
         .setLngLat([lng, lat])
-        .setHTML(`<h3>${markerTitle}</h3><p>${markerDescription}</p>`)
+        .setHTML(`<h3>${escapeHtml(markerTitle)}</h3><p>${markerDescription}</p>`)
         .addTo(map.current);
     });
     return marker; 
@@ -107,136 +134,82 @@ async function findNearestDisaster(userLat, userLong) {
 }
 
 
-  async function handleSearch() {
-    if (!userLoc || userLoc.length < 3) return;
-
-    try {
-      const response = await fetch(`${backendUrl}/maps/get-coordinates?address=${userLoc}`);
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch coordinates');
-      }
-      const data = await response.json();
-      if (data) {
-        const { lng, lat } = data;
-        map.current.setCenter([lng, lat]);
-        map.current.setZoom(3)
-        if(userMarkerRef.current) {
-          userMarkerRef.current.remove(); 
-        }
-        userMarkerRef.current = await addMarker(lat, lng, "#00FF00", "User Location", `You searched for: ${userLoc}`);
-        findNearestDisaster(lat,lng)
-        
-        setUserLoc('');
-      }
-    } catch (error) {
-      console.error('Error fetching coordinates:', error);
-      
-    }
-
-  }
-
-
-  async function setData(dataStr) {
-    try {
-      const cleaned = dataStr
-        .replace(/^```json\s*/, '')  
-        .replace(/```$/, '')         
-        .trim();
-
-      const parsed = JSON.parse(cleaned);
-      setResult(parsed); 
-
-      for (const item of parsed) {
-        try{
-          await axios.post(`${backendUrl}/api/add-calamity-db`, {
-            disaster_datetime: item.disaster_datetime,
-            disaster_location: item.disaster_location,
-            article_link: item.article_link,
-            disaster_type: item.disaster_type
-          });
-        
-        } catch (err) {
-          console.log("Failed to add disaster to DB:", err);
-        }
-        await geocodeAndAddDisasterMarker(item);
-      }
-    } catch (err) {
-      console.error("Failed to parse disaster data:", err);
-    }
-  }
-
-
   async function fetchResults() {
-    try {
-      try {
-        const res = await axios.get(
-          "https://eonet.gsfc.nasa.gov/api/v3/events?days=20&status=open"
-        );
-
-        if (res.data) {
-          for (const item of res.data.events) {
-            const lat = item.geometry[0].coordinates[1];
-            const lng = item.geometry[0].coordinates[0];
-            const disaster_type =
-              item.categories[0].id || item.categories[0].title;
-            const article_link = item.sources[0].url;
-            const disaster_location = "From NASA Open API";
-            const disaster_datetime = item.geometry[0].date;
-
-            await addMarker(
-              lat,
-              lng,
-              "#fffb00",
-              `${disaster_type.toUpperCase()} - ${new Date(
-                disaster_datetime
-              ).toLocaleString()}`,
-              `<a href="${article_link}" target="_blank">Read more</a><br/>Location: ${disaster_location}`
-            );
-
-            setMarkers((m) => [...m, { lat, lng, disaster_location }]);
-          }
+  try {
+    const response = await axios.get(
+      `${backendUrl}/api/incidents`,
+      {
+        params: {
+          status: "candidate,active"
         }
-      } catch (err) {
-        console.log("NASA API failed, continuing...");
+      }
+    );
+
+    const incidents = response.data?.data || [];
+
+    setResult(incidents);
+
+    const nextMarkers = [];
+
+    for (const incident of incidents) {
+      const coordinates = incident.location?.coordinates;
+
+      if (
+        !Array.isArray(coordinates) ||
+        coordinates.length !== 2
+      ) {
+        continue;
       }
 
-      const dbResponse = await axios.get(
-        `${backendUrl}/api/get-calamities-db`
+      const [lng, lat] = coordinates;
+
+      const markerColor =
+        incident.status === "active"
+          ? "#FF5733"
+          : "#F5C542";
+
+      const source = incident.sources?.[0];
+
+      const markerTitle =
+        `${incident.type.toUpperCase()} — ${incident.status.toUpperCase()}`;
+      const sourceUrl = safeExternalUrl(source?.canonicalUrl);
+      const markerDescription = `
+        <strong>Location:</strong> ${escapeHtml(incident.locationName)}<br/>
+        <strong>Precision:</strong> ${escapeHtml(incident.locationPrecision)}<br/>
+        <strong>Severity:</strong> ${escapeHtml(incident.severity)}<br/>
+        <strong>Confidence:</strong> ${Math.round(
+          incident.confidenceScore * 100
+        )}%<br/>
+        <strong>Summary:</strong> ${escapeHtml(incident.summary)}<br/>
+        <strong>Sources:</strong> ${incident.evidenceCount}
+        ${
+          sourceUrl
+            ? `<br/><a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">Read source</a>`
+            : ""
+        }
+      `;
+
+      addMarker(
+        lat,
+        lng,
+        markerColor,
+        markerTitle,
+        markerDescription
       );
 
-      if (dbResponse.data && dbResponse.data.length > 0) {
-        const disasters = dbResponse.data;
-        setResult(disasters);
-
-        for (const disaster of disasters) {
-          await addMarker(
-            disaster.lat,
-            disaster.lng,
-            "#FF5733",
-            `${disaster.disaster_type.toUpperCase()} - ${new Date(disaster.disaster_datetime).toLocaleString()}`,
-            `<a href="${disaster.article_link}" target="_blank">Read more</a><br/>Location: ${disaster.disaster_location}`
-          );
-
-          setMarkers((m) => [
-            ...m,
-            {
-              lat: disaster.lat,
-              lng: disaster.lng,
-              disaster_location: disaster.disaster_location
-            }
-          ]);
-        }
-      } else {
-        const response = await axios.get(`${backendUrl}/api/calamities`);
-        const data = response.data;
-
-        setData(data.data);
-      }
-    } catch (error) {
-      console.error("Error fetching results:", error);
-      setResult([]);
+      nextMarkers.push({
+        lat,
+        lng,
+        disaster_location: incident.locationName
+      });
     }
+
+    setMarkers(nextMarkers);
+  } catch (error) {
+    console.error("Failed to fetch incidents:", error);
+    setResult([]);
   }
+}
 
   useEffect(() => {
     if (map.current) return;

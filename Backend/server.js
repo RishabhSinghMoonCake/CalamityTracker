@@ -1,12 +1,14 @@
 import http from "http";
 import app from "./app.js";
 import connectDB from "./db/db.js";
+import { connectRedis } from "./config/redis.js";
 
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {
   try {
     await connectDB();
+    await connectRedis();
 
     //await import("./cron/disaster.worker.js");
 

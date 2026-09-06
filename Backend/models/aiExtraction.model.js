@@ -19,6 +19,12 @@ const extractedEventSchema = new mongoose.Schema(
       trim: true
     },
 
+    locationPrecision: {
+      type: String,
+      enum: ["city", "region", "country", "unknown"],
+      default: "unknown"
+    },
+
     occurredAt: {
       type: Date,
       default: null

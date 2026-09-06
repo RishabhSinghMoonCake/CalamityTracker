@@ -26,11 +26,26 @@ function parseExtraction(text){
     throw new Error("AI response has an invalid confidence value");
   }
 
+  const allowedLocationPrecisions = [
+    "city",
+    "region",
+    "country",
+    "unknown"
+  ];
+
+  const locationPrecision =
+    parsed.locationPrecision || "unknown";
+
+  if (!allowedLocationPrecisions.includes(locationPrecision)) {
+    throw new Error("AI response has an invalid locationPrecision value");
+  }
+
   return {
     result: {
       isDisaster: parsed.isDisaster,
       disasterType: parsed.disasterType || null,
       locationName: parsed.locationName || null,
+      locationPrecision,
       occurredAt: parsed.occurredAt ? new Date(parsed.occurredAt) : null,
       severity: parsed.severity || null,
       summary: parsed.summary || null
@@ -85,6 +100,7 @@ Use exactly this shape:
   "isDisaster": true,
   "disasterType": "flood",
   "locationName": "City, Region, Country",
+  "locationPrecision": "city",
   "occurredAt": "2026-08-22T05:53:00.000Z",
   "severity": "low",
   "summary": "One short factual sentence.",
@@ -99,7 +115,14 @@ Rules:
 - severity must be one of: low, moderate, high, critical, or null.
 - confidence must be a number from 0 to 1.
 - Use the event time if clearly stated; otherwise use the article publication time.
-- Do not invent a location.
+- Reserve confidence 1.0 for cases where the article directly and unambiguously states the event type, location, and impact.
+- Use lower confidence when the event location, severity, or facts are incomplete.
+
+Location rules:
+- Extract the event location, not the publisher's; use the most specific place explicitly supported: neighborhood → city → district → state/province → country.
+- If only a country is known, use it as locationName; never leave locationName null merely because a city is unavailable. Use null only when no trustworthy event geography exists.
+- Article metadata country is supporting context only; never assume it is the event location. Never invent, guess, or infer a specific location from indirectly mentioned conflicts/countries.
+- locationPrecision must be city, region, country, or unknown: city = named city/town/locality; region = state/province/district/island/sea/similarly broad area; country = best trustworthy country; unknown = locationName is null.
 
 Article:
 ${JSON.stringify(
@@ -155,5 +178,42 @@ ${JSON.stringify(
     await article.save();
 
     throw error;
+  }
+}
+
+
+async function processPendingBatch() {
+  const batchSize = Number(process.env.AI_BATCH_SIZE || 3);
+  const results = [];
+
+  for (let index = 0; index < batchSize; index++) {
+    const result = await processNextPendingArticle();
+
+    if (!result.processed) {
+      break;
+    }
+
+    results.push(result);
+  }
+
+  return {
+    requestedBatchSize: batchSize,
+    processedCount: results.length,
+    results
+  };
+}
+
+export async function processArticleBatch(req, res) {
+  try {
+    const result = await processPendingBatch();
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("AI batch processing failed:", error.message);
+
+    res.status(500).json({
+      message: "AI batch processing failed",
+      error: error.message
+    });
   }
 }

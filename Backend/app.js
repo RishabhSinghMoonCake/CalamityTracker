@@ -5,9 +5,9 @@ import router from './routes/maps.routes.js';
 import apiRouter from './routes/apiRoutes.js';
 import redisClient from './config/redis.js';
 const app = express();
+app.set("trust proxy", 1);
 
-// Middleware to parse JSON requests
-app.use(express.json());
+app.use(express.json({ limit: "256kb" }));
 //middlewares
 app.use(
   cors({

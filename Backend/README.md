@@ -76,6 +76,13 @@ Run the automated suite:
 npm run test
 ```
 
+Run the Redis integration check when Redis is available:
+
+```powershell
+$env:RUN_REDIS_TESTS="true"
+npm run test
+```
+
 The suite uses Node's built-in test runner and covers:
 
 - liveness and readiness endpoint contracts;
@@ -119,6 +126,8 @@ AI_MODEL_NAME=gemini-2.5-flash
 AI_PROMPT_VERSION=v2
 AI_MAX_ATTEMPTS=3
 AI_BATCH_SIZE=3
+AI_DAILY_REQUEST_BUDGET=15
+AI_RATE_LIMIT_COOLDOWN_SECONDS=86400
 
 NOMINATIM_BASE_URL=https://nominatim.openstreetmap.org
 GEOCODING_USER_AGENT=CalamityTracker/1.0 (your-email@example.com)
@@ -144,6 +153,8 @@ When `PIPELINE_AUTOMATION_ENABLED=true` and `npm run worker` is running:
 6. The incident job geocodes, creates or merges the incident, then increments the Redis cache version.
 
 Jobs retry three times with exponential backoff. Completed jobs are retained for one day; failed jobs are retained for seven days.
+
+Gemini calls also use a Redis-backed daily budget and cooldown circuit breaker. A provider 429 returns the article to `pending`, pauses new AI calls, and avoids a retry storm.
 
 ## Data model
 

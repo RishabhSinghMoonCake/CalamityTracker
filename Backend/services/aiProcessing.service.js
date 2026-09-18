@@ -1,6 +1,11 @@
 import { GoogleGenAI } from "@google/genai";
 import RawArticle from "../models/rawArticle.model.js";
 import AiExtraction from "../models/aiExtraction.model.js";
+import {
+  acquireAiRequest,
+  activateAiCooldown,
+  isQuotaError
+} from "./aiQuota.service.js";
 
 const MODEL_NAME = process.env.AI_MODEL_NAME
 const PROMPT_VERSION = process.env.AI_PROMPT_VERSION
@@ -94,6 +99,21 @@ export async function processNextPendingArticle(rawArticleId = null) {
   }
 
   try {
+    const quota = await acquireAiRequest();
+
+    if (!quota.allowed) {
+      article.status = "pending";
+      article.lastError = `AI processing paused: ${quota.reason}`;
+      await article.save();
+
+      return {
+        processed: false,
+        articleId: article._id.toString(),
+        reason: quota.reason,
+        retryAfterSeconds: quota.retryAfterSeconds || null
+      };
+    }
+
     const prompt = `
 You are classifying a news article for a disaster-monitoring system.
 
@@ -179,6 +199,20 @@ ${JSON.stringify(
       locationName: result.locationName
     };
   } catch (error) {
+    if (isQuotaError(error)) {
+      const cooldownSeconds = await activateAiCooldown(error);
+      article.status = "pending";
+      article.lastError = "AI provider quota exhausted";
+      await article.save();
+
+      return {
+        processed: false,
+        articleId: article._id.toString(),
+        reason: "provider_quota",
+        retryAfterSeconds: cooldownSeconds
+      };
+    }
+
     article.status = "failed";
     article.lastError = error.message;
     await article.save();

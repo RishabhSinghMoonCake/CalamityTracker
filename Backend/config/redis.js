@@ -9,6 +9,10 @@ redisClient.on("error", (error) => {
 });
 
 export async function connectRedis() {
+  if (redisClient.isOpen) {
+    return;
+  }
+
   await redisClient.connect();
   console.log("Redis connection established successfully");
 }

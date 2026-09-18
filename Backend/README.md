@@ -191,6 +191,11 @@ The map-facing real-world event.
 - Status: `candidate`, `active`, `resolved`, or `rejected`.
 - Links to source articles and AI extractions as evidence.
 - Candidate incidents stay clearly distinct from verified active incidents.
+- `evidenceReports` and `communityReportCount` capture corroborating citizen reports without exposing individual report locations.
+
+### CommunityReport
+
+An idempotent, rate-limited citizen report. Reports remain private evidence until independent reporters within a configured time/radius threshold create or support a candidate incident.
 
 ## API
 

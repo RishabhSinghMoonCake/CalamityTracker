@@ -124,6 +124,7 @@ export async function getIncidents(req, res) {
       summary: incident.summary,
       confidenceScore: incident.confidenceScore,
       evidenceCount: incident.evidenceArticles.length,
+      communityReportCount: incident.communityReportCount || 0,
       sources: incident.evidenceArticles
     }));
 

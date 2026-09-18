@@ -91,6 +91,12 @@ const incidentSchema = new mongoose.Schema(
       }
     ],
 
+    evidenceReports: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "CommunityReport" }
+    ],
+
+    communityReportCount: { type: Number, default: 0, min: 0 },
+
     firstReportedAt: {
       type: Date,
       default: Date.now

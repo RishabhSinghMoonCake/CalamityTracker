@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createClient } from "redis";
 
-test("Redis accepts a ping and supports incident cache-version invalidation", async () => {
+test("Redis accepts a ping and supports incident cache-version invalidation", {
+  skip: process.env.RUN_REDIS_TESTS !== "true"
+}, async () => {
   const client = createClient({
     url: process.env.REDIS_URL || "redis://127.0.0.1:6379",
     socket: {

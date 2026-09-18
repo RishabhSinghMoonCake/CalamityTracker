@@ -1,6 +1,7 @@
 import AiExtraction from "../models/aiExtraction.model.js";
 import Incident from "../models/incident.model.js";
 import { geocodeLocation } from "./geocoding.service.js";
+import { publishIncidentEvent } from "./realtime.service.js";
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -90,6 +91,9 @@ export async function createIncidentFromExtraction(extractionId) {
         lastUpdatedAt: new Date()
       }
     });
+    publishIncidentEvent("incident.updated", {
+      incidentId: matchingIncident._id.toString()
+    });
 
     return {
       created: false,
@@ -112,6 +116,10 @@ export async function createIncidentFromExtraction(extractionId) {
     evidenceExtractions: [extraction._id],
     firstReportedAt: new Date(),
     lastUpdatedAt: new Date()
+  });
+
+  publishIncidentEvent("incident.created", {
+    incidentId: incident._id.toString()
   });
 
   return {

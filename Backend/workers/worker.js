@@ -1,16 +1,13 @@
 import mongoose from "mongoose";
-
 import connectDB from "../db/db.js";
-import redisClient, {
-  connectRedis
-} from "../config/redis.js";
+import redisClient, { connectRedis } from "../config/redis.js";
 
-const automationEnabled =
-  process.env.PIPELINE_AUTOMATION_ENABLED === "true";
+const automationEnabled = process.env.PIPELINE_AUTOMATION_ENABLED === "true";
 
 let newsWorker;
 let aiWorker;
 let incidentWorker;
+let communityWorker;
 let closeQueues = async () => {};
 
 async function startWorker() {
@@ -18,7 +15,6 @@ async function startWorker() {
     console.log(
       "Pipeline automation is disabled. Set PIPELINE_AUTOMATION_ENABLED=true to run workers."
     );
-
     return;
   }
 
@@ -26,19 +22,18 @@ async function startWorker() {
     { Worker },
     queueModule,
     { ingestNews },
-    {
-      processArticleById,
-      processPendingBatch
-    },
+    { processArticleById, processPendingBatch },
     { createIncidentFromExtraction },
-    { invalidateIncidentsCache }
+    { invalidateIncidentsCache },
+    { createCommunityReport }
   ] = await Promise.all([
     import("bullmq"),
     import("../queues/pipeline.queues.js"),
     import("../services/newsIngestion.service.js"),
     import("../services/aiProcessing.service.js"),
     import("../services/incidentCreation.service.js"),
-    import("../services/incidentCache.service.js")
+    import("../services/incidentCache.service.js"),
+    import("../services/communityReport.service.js")
   ]);
 
   const {
@@ -46,6 +41,7 @@ async function startWorker() {
     newsIngestionQueue,
     aiProcessingQueue,
     incidentCreationQueue,
+    communityProcessingQueue,
     closeQueues: closeBullQueues
   } = queueModule;
 
@@ -54,6 +50,7 @@ async function startWorker() {
   await connectDB();
   await connectRedis();
 
+  // Upsert Cron Schedulers
   await newsIngestionQueue.upsertJobScheduler(
     "news-ingestion-schedule",
     {
@@ -76,6 +73,18 @@ async function startWorker() {
     }
   );
 
+  const newsCounts = await newsIngestionQueue.getJobCounts("waiting", "active");
+  if (newsCounts.waiting === 0 && newsCounts.active === 0) {
+    console.log("Enqueueing initial news ingestion job to run immediately...");
+    await newsIngestionQueue.add("ingest-news", {}, { jobId: "initial-ingest-news" });
+  }
+
+  const aiCounts = await aiProcessingQueue.getJobCounts("waiting", "active");
+  if (aiCounts.waiting === 0 && aiCounts.active === 0) {
+    console.log("Enqueueing initial AI processing batch job...");
+    await aiProcessingQueue.add("process-pending-batch", {}, { jobId: "initial-process-pending-batch" });
+  }
+
   async function enqueueIncidentIfEligible(result) {
     if (
       !result?.processed ||
@@ -97,11 +106,11 @@ async function startWorker() {
     return true;
   }
 
+  // 1. News Ingestion Worker
   newsWorker = new Worker(
     "news-ingestion",
     async (job) => {
       console.log(`Starting news ingestion job ${job.id}`);
-
       const summary = await ingestNews();
 
       const aiJobs = await Promise.all(
@@ -115,11 +124,6 @@ async function startWorker() {
           )
         )
       );
-
-/*       console.log(
-        `Completed news ingestion job ${job.id}:`,
-        summary
-      ); */
 
       return {
         ...summary,
@@ -140,6 +144,7 @@ async function startWorker() {
     console.error(`News job ${job?.id} failed:`, error.message);
   });
 
+  // 2. AI Processing Worker
   aiWorker = new Worker(
     "ai-processing",
     async (job) => {
@@ -156,14 +161,11 @@ async function startWorker() {
       }
 
       if (job.name === "process-article") {
-        const result = await processArticleById(
-          job.data.rawArticleId
-        );
+        const result = await processArticleById(job.data.rawArticleId);
 
         return {
           ...result,
-          incidentJobsEnqueued:
-            (await enqueueIncidentIfEligible(result)) ? 1 : 0
+          incidentJobsEnqueued: (await enqueueIncidentIfEligible(result)) ? 1 : 0
         };
       }
 
@@ -183,6 +185,7 @@ async function startWorker() {
     console.error(`AI job ${job?.id} failed:`, error.message);
   });
 
+  // 3. Incident Creation Worker
   incidentWorker = new Worker(
     "incident-creation",
     async (job) => {
@@ -190,9 +193,7 @@ async function startWorker() {
         throw new Error(`Unsupported incident job: ${job.name}`);
       }
 
-      const result = await createIncidentFromExtraction(
-        job.data.extractionId
-      );
+      const result = await createIncidentFromExtraction(job.data.extractionId);
 
       if (result.created || result.merged) {
         await invalidateIncidentsCache();
@@ -214,23 +215,51 @@ async function startWorker() {
     console.error(`Incident job ${job?.id} failed:`, error.message);
   });
 
-  console.log("BullMQ pipeline workers are running");
+  // 4. Community Processing Worker
+  communityWorker = new Worker(
+    "community-processing",
+    async (job) => {
+      console.log(`Processing community job ${job.id} (${job.name})`);
+      if (job.name === "process-community-report") {
+        const { input, reporterKey } = job.data;
+        const result = await createCommunityReport(input, reporterKey);
+        return result;
+      }
+      throw new Error(`Unsupported community job: ${job.name}`);
+    },
+    {
+      connection: bullConnection,
+      concurrency: 2
+    }
+  );
+
+  communityWorker.on("completed", (job, result) => {
+    console.log(`Community job ${job.id} completed:`, result);
+  });
+
+  communityWorker.on("failed", (job, error) => {
+    console.error(`Community job ${job?.id} failed:`, error.message);
+  });
+
+  console.log("BullMQ pipeline workers (News, AI, Incident, Community) are active");
 }
 
 async function shutdown(signal) {
   console.log(`Received ${signal}. Closing worker connections...`);
 
-  await newsWorker?.close();
-  await aiWorker?.close();
-  await incidentWorker?.close();
-  await closeQueues();
+  await Promise.allSettled([
+    newsWorker?.close(),
+    aiWorker?.close(),
+    incidentWorker?.close(),
+    communityWorker?.close(),
+    closeQueues()
+  ]);
 
   if (redisClient.isOpen) {
     await redisClient.quit();
   }
 
   await mongoose.disconnect();
-
   process.exit(0);
 }
 

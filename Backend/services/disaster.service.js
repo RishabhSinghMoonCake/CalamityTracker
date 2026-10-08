@@ -55,9 +55,13 @@ export async function fetchNews() {
 
   const allResponses = [];
 
+  console.log(`[fetchNews] Starting to fetch news with queries: ${queries.join(' | ')}`);
+
   for(const query of queries)
   {
+    console.log(`[fetchNews] Fetching news for query: "${query}"`);
     try{
+      console.log(`[fetchNews] Making request to: ${process.env.NEWS_API_URL} with apikey: ${process.env.NEWS_API_KEY ? "PRESENT" : "MISSING"}`);
       const response = await axios.get(process.env.NEWS_API_URL,{
         params:{
           apikey: process.env.NEWS_API_KEY,
@@ -66,17 +70,24 @@ export async function fetchNews() {
         timeout: 10000
       });
 
+      const resultCount = response.data?.results?.length || 0;
+      console.log(`[fetchNews] Success! Received ${resultCount} articles for query "${query}"`);
+
       allResponses.push(response.data);
 
       await new Promise((resolve) => setTimeout(resolve, 1200));
     } catch(error){
-      console.warn(`News request failed for "${query}": ${error.message}`);
+      console.warn(`[fetchNews] News request failed for "${query}": ${error.message}`);
+      if (error.response) {
+        console.warn(`[fetchNews] Response status: ${error.response.status}`);
+        console.warn(`[fetchNews] Response data:`, JSON.stringify(error.response.data, null, 2));
+      }
     }
   }
 
   const normalizedArticles = normalizeNewsResponses(allResponses);
 
-  console.log(`Fetched and normalized ${normalizedArticles.length} unique articles`);
+  console.log(`[fetchNews] Completed fetching. Normalized ${normalizedArticles.length} unique articles across all queries.`);
   return normalizedArticles;
 }
 

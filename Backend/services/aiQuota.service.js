@@ -15,38 +15,92 @@ function parseRetrySeconds(error) {
 
 export function isQuotaError(error) {
   const message = String(error?.message || "");
-  return error?.status === "RESOURCE_EXHAUSTED" ||
+  return (
+    error?.status === "RESOURCE_EXHAUSTED" ||
     error?.code === 429 ||
-    /quota exceeded|resource_exhausted|rate limit/i.test(message);
+    error?.status === 429 ||
+    /quota exceeded|resource_exhausted|rate limit|too many requests|429/i.test(message)
+  );
 }
 
-export async function acquireAiRequest() {
-  const cooldownTtl = await redisClient.ttl(COOLDOWN_KEY);
+export function cooldownKeyFor(provider = "gemini") {
+  return `ai:cooldown:${provider.toLowerCase()}`;
+}
 
-  if (cooldownTtl > 0) {
-    return { allowed: false, reason: "cooldown", retryAfterSeconds: cooldownTtl };
+export async function checkProviderAvailability(provider = "gemini") {
+  try {
+    if (!redisClient?.isReady) return { available: true, cooldownTtl: 0 };
+    const key = cooldownKeyFor(provider);
+    const ttl = await redisClient.ttl(key);
+    if (ttl > 0) {
+      return { available: false, cooldownTtl: ttl, reason: "cooldown" };
+    }
+    return { available: true, cooldownTtl: 0 };
+  } catch (error) {
+    console.warn(`Error checking availability for ${provider}:`, error.message);
+    return { available: true, cooldownTtl: 0 };
   }
+}
 
-  const budget = Number(process.env.AI_DAILY_REQUEST_BUDGET || 15);
-  const key = `${BUDGET_KEY_PREFIX}:${todayKey()}`;
-  const used = await redisClient.incr(key);
+export async function activateProviderCooldown(provider = "gemini", error = null, customSeconds = null) {
+  const providerRetry = parseRetrySeconds(error);
+  const configured = customSeconds ?? Number(process.env.AI_RATE_LIMIT_COOLDOWN_SECONDS || 86400);
+  const seconds = Math.max(providerRetry, configured);
 
-  if (used === 1) {
-    await redisClient.expire(key, 2 * 24 * 60 * 60);
+  try {
+    if (redisClient?.isReady) {
+      await redisClient.set(cooldownKeyFor(provider), "1", { EX: seconds });
+    }
+  } catch (err) {
+    console.warn(`Failed to set cooldown for ${provider}:`, err.message);
   }
+  return seconds;
+}
 
-  if (used > budget) {
-    return { allowed: false, reason: "daily_budget", used, budget };
+export async function acquireAiRequest(provider = "gemini") {
+  try {
+    if (!redisClient?.isReady) {
+      return { allowed: true, used: 1, budget: 100 };
+    }
+
+    const avail = await checkProviderAvailability(provider);
+    if (!avail.available) {
+      return { allowed: false, reason: "cooldown", retryAfterSeconds: avail.cooldownTtl, provider };
+    }
+
+    const budget = Number(process.env.AI_DAILY_REQUEST_BUDGET || 50);
+    const key = `${BUDGET_KEY_PREFIX}:${provider.toLowerCase()}:${todayKey()}`;
+    const used = await redisClient.incr(key);
+
+    if (used === 1) {
+      await redisClient.expire(key, 2 * 24 * 60 * 60);
+    }
+
+    if (used > budget) {
+      return { allowed: false, reason: "daily_budget", used, budget, provider };
+    }
+
+    return { allowed: true, used, budget, provider };
+  } catch (error) {
+    console.warn(`Quota acquisition check failed for ${provider}:`, error.message);
+    return { allowed: true, used: 0, budget: 0, provider };
   }
-
-  return { allowed: true, used, budget };
 }
 
 export async function activateAiCooldown(error) {
-  const providerRetry = parseRetrySeconds(error);
-  const configured = Number(process.env.AI_RATE_LIMIT_COOLDOWN_SECONDS || 86400);
-  const seconds = Math.max(providerRetry, configured);
-
-  await redisClient.set(COOLDOWN_KEY, "1", { EX: seconds });
-  return seconds;
+  return activateProviderCooldown("gemini", error);
 }
+
+export async function getProvidersHealthStatus(providers = ["gemini", "openai", "mock"]) {
+  const status = {};
+  for (const provider of providers) {
+    const avail = await checkProviderAvailability(provider);
+    status[provider] = {
+      available: avail.available,
+      cooldownTtl: avail.cooldownTtl,
+      status: avail.available ? "healthy" : "cooling_down"
+    };
+  }
+  return status;
+}
+

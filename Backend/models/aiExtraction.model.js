@@ -89,6 +89,22 @@ const aiExtractionSchema = new mongoose.Schema(
       type: String,
       enum: ["success", "not_a_disaster", "invalid_output", "failed"],
       required: true
+    },
+
+    provider: {
+      type: String,
+      default: "gemini",
+      index: true
+    },
+
+    executionTimeMs: {
+      type: Number,
+      default: 0
+    },
+
+    fallbackReason: {
+      type: String,
+      default: null
     }
   },
   {

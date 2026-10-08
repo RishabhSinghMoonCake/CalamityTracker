@@ -1,5 +1,18 @@
 import mongoose from "mongoose";
 
+const corroborationSchema = new mongoose.Schema(
+  {
+    reporterHash: { type: String, required: true },
+    corroboratedAt: { type: Date, default: Date.now },
+    comment: { type: String, trim: true, maxlength: 500, default: null },
+    location: {
+      type: { type: String, enum: ["Point"] },
+      coordinates: { type: [Number] }
+    }
+  },
+  { _id: false }
+);
+
 const communityReportSchema = new mongoose.Schema(
   {
     clientReportId: { type: String, required: true, unique: true, trim: true },
@@ -10,10 +23,16 @@ const communityReportSchema = new mongoose.Schema(
     location: {
       type: { type: String, enum: ["Point"], required: true },
       coordinates: {
-        type: [Number], required: true,
+        type: [Number],
+        required: true,
         validate: {
-          validator: (value) => Array.isArray(value) && value.length === 2 &&
-            value[0] >= -180 && value[0] <= 180 && value[1] >= -90 && value[1] <= 90,
+          validator: (value) =>
+            Array.isArray(value) &&
+            value.length === 2 &&
+            value[0] >= -180 &&
+            value[0] <= 180 &&
+            value[1] >= -90 &&
+            value[1] <= 90,
           message: "Location must be [longitude, latitude]"
         }
       }
@@ -26,7 +45,10 @@ const communityReportSchema = new mongoose.Schema(
       default: "pending",
       index: true
     },
-    incidentId: { type: mongoose.Schema.Types.ObjectId, ref: "Incident", default: null, index: true }
+    incidentId: { type: mongoose.Schema.Types.ObjectId, ref: "Incident", default: null, index: true },
+    corroborations: [corroborationSchema],
+    corroborationCount: { type: Number, default: 1, min: 1 },
+    verifiedByAdmin: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

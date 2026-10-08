@@ -1,90 +1,98 @@
-# 🌍 Calamity Tracker
+# Calamity Tracker
 
-**A real-time disaster tracking and monitoring system focused on awareness, visualization, and rapid information access.**
-
----
-
-## 🚀 About The Project
-
-**Calamity Tracker** is a project aimed at building a **centralized platform for tracking natural disasters and critical events in real time**.
-
-The idea is to provide users with **clear, accessible, and up-to-date information** about ongoing calamities — helping improve awareness and potentially enabling faster response.
-
-This project explores the intersection of **data visualization, real-time systems, and user-focused design**.
+An event-driven disaster intelligence platform that separates raw news evidence, Multi-AI extraction with automatic failover, community corroboration signals, geospatial clustering, and map-facing incidents. Unverified information never becomes a public map marker by default.
 
 ---
 
-## ⚠️ Project Status
+## Highlights
 
-🚧 **Work in Progress / Experimental**
-
-This project is currently under exploration and iteration.
-Core ideas and systems are being tested, refined, and expanded.
-
----
-
-## 🧠 Core Features
-
-* 🌍 **Disaster Tracking Interface**
-  Visual representation of ongoing events
-
-* 📡 **Real-Time Data Handling (Planned / Partial)**
-  Designed to integrate live data sources
-
-* 📊 **Interactive Visualization**
-  Making complex data easy to understand
-
-* 🧩 **Modular System Design**
-  Built with scalability and future expansion in mind
+- **Multi-AI Routing & Resilience**: Provider-agnostic classification engine with primary Google Gemini (`gemini-2.5-flash`), OpenAI-compatible failover (`gpt-4o-mini`, Groq `llama-3.3-70b`, Ollama), and deterministic fallback with Redis per-provider cooldown circuit breakers.
+- **Complete Citizen Community Feature**: Rate-limited, idempotent citizen reporting with privacy preservation (anonymized coordinates), crowd corroboration ("I can confirm this"), and automatic threshold promotion into candidate incidents.
+- **Redis Incident Cache & Pub/Sub Realtime Fanout**: Observable `X-Cache: HIT/MISS` headers, sub-millisecond cached responses, and cross-process SSE streaming across workers and API replicas.
+- **BullMQ Worker Pipeline**: Dedicated queues for `news-ingestion`, `ai-processing`, `incident-creation`, and `community-processing` with live queue monitoring APIs.
+- **Geospatial Correlation & Indexing**: MongoDB GeoJSON `2dsphere` indexes with cluster centroid calculation and L1 Redis / L2 MongoDB geocoding caching.
+- **Modern Interactive Web Interface**: Sleek dark glassmorphic UI, dual-layer map markers (incidents vs. community signals), interactive pinpoint placement on map, sliding intelligence drawer, and live SSE updates.
 
 ---
 
-## 🛠️ Tech Stack
+## System Architecture
 
-* **Frontend:** JavaScript / HTML / CSS
-* **Backend:** Node.js (planned / partial)
-* **Focus Areas:** Real-time systems, APIs, data visualization
+```text
+BullMQ Scheduler ──► NewsData API ──► RawArticle (Deduplicated) ──► Multi-AI Router (Gemini / OpenAI / Mock)
+                                                                           │
+Citizen Report ──► Corroboration Engine (Threshold: 3) ────────────────────┼──► Incident ──► Redis Cache ──► React Map
+                                                                           │         │
+                                                                 L1 Redis Geocode    └──► Redis Pub/Sub ──► Live SSE
+```
 
----
-
-## 🔧 What This Project Explores
-
-* ⚙️ Designing **real-time data pipelines**
-* 🌐 Integrating **external APIs for live updates**
-* 📈 Building **intuitive dashboards and UI systems**
-* 🧩 Structuring scalable **full-stack architecture**
-
----
-
-## 💡 Vision
-
-* Provide a **reliable disaster awareness platform**
-* Enable better **decision-making through data**
-* Expand into a **fully functional real-time monitoring system**
+- Complete architectural specifications: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Complete REST & SSE API reference: [docs/API.md](docs/API.md)
+- Production deployment runbook: [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md)
 
 ---
 
-## 📂 Repository
+## Quick Start
 
-👉 https://github.com/RishabhSinghMoonCake/CalamityTracker
+### 1. Local Development
+
+Ensure MongoDB and Redis are running locally.
+
+```powershell
+# Backend API & Worker
+cd Backend
+npm install
+npm run dev
+
+# Frontend
+cd ../Frontend
+npm install
+npm run dev
+```
+
+Run background worker separately when automation is enabled:
+```powershell
+cd Backend
+$env:PIPELINE_AUTOMATION_ENABLED="true"
+npm run worker
+```
+
+### 2. Turnkey Docker Deployment
+
+Run the complete stack (MongoDB, Redis, API, Worker, and Nginx Frontend) with one command:
+
+```powershell
+docker compose up -d --build
+```
+
+Access the frontend at `http://localhost:3000` and the API at `http://localhost:8000`.
 
 ---
 
-## 🔮 Future Scope
+## Verification & Testing
 
-* Integrate live disaster APIs
-* Add geolocation-based alerts
-* Improve UI/UX for better clarity
-* Deploy as a fully functional web app
+Run the full automated test suite:
+
+```powershell
+cd Backend
+npm run test
+```
+
+Inspect BullMQ queue health and AI provider availability:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/admin/queues
+Invoke-RestMethod http://localhost:8000/api/admin/ai/providers
+```
+
+Build the production frontend bundle:
+
+```powershell
+cd Frontend
+npm run build
+```
 
 ---
 
-## 👨‍💻 Developer
+## Safety & Ethics
 
-**Rishabh Singh**
-CSE Undergraduate
-Aspiring Software Engineer | Indie Game Developer
-
----
-
-⭐ *A project driven by curiosity — exploring how technology can help make sense of real-world chaos.*
+Calamity Tracker is an awareness and early detection tool, not an emergency dispatch service. Candidate incidents are unconfirmed public signals and do not replace official civic emergency alerts.

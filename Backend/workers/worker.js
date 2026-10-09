@@ -180,7 +180,11 @@ async function startWorker() {
     },
     {
       connection: bullConnection,
-      concurrency: 1
+      concurrency: 1,
+      limiter: {
+        max: 1,
+        duration: 8000
+      }
     }
   );
 

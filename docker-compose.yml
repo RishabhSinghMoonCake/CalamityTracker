@@ -3,8 +3,8 @@ services:
     image: mongo:7.0
     container_name: calamity-mongodb
     restart: unless-stopped
-    expose:
-      - "27017"
+    ports:
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
     networks:

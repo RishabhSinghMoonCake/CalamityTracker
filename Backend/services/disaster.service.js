@@ -1,7 +1,7 @@
 import axios from "axios";
 import Incident from "../models/incident.model.js";
 
-const RELEVANT_NEWS_PATTERN = /\b(flood(?:ing|ed)?|earthquake|tremor|seismic|wildfire|bushfire|forest fire|hurricane|typhoon|cyclone|tropical storm|volcano|volcanic eruption|landslide|mudslide|disease outbreak|epidemic|pandemic|industrial accident|chemical spill|chemical explosion|transport accident|train derailment|plane crash|active shooter|terrorist attack|mass casualty|missile attack|airstrike)\b/i;
+const RELEVANT_NEWS_PATTERN = /\b(flood(?:ing|ed)?|earthquake|tremor|seismic|wildfire|bushfire|forest fire|hurricane|typhoon|cyclone|tropical storm|volcano|volcanic eruption|landslide|mudslide|disease outbreak|epidemic|pandemic|industrial accident|chemical spill|chemical explosion|transport accident|train derailment|plane crash|active shooter|terrorist attack|mass casualty|missile attack|airstrike|tornado|tsunami|drought|famine|avalanche|blizzard|heatwave|monsoon|storm surge|radiation|nuclear|sinkhole|bioterrorism|riot|civil unrest|bombing|hostage|casualty|fatalities|evacuation|emergency|crisis|disaster)\b/i;
 
 export function isRelevantNewsArticle(article) {
   return RELEVANT_NEWS_PATTERN.test(`${article?.title || ""} ${article?.description || ""}`);

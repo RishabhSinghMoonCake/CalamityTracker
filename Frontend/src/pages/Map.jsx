@@ -5,55 +5,10 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Map.css";
 
-// Same-origin by default: Nginx (production) and Vite (development) proxy /api.
-const API = import.meta.env.VITE_BACKEND_URL || "";
-
-const CALAMITY_TYPES = [
-  { id: "all", label: "All Calamities", icon: "🌐" },
-  { id: "flood", label: "Flood", icon: "🌊" },
-  { id: "wildfire", label: "Wildfire", icon: "🔥" },
-  { id: "earthquake", label: "Earthquake", icon: "⚡" },
-  { id: "landslide", label: "Landslide", icon: "🏔️" },
-  { id: "storm", label: "Storm & Cyclone", icon: "🌪️" },
-  { id: "tsunami", label: "Tsunami", icon: "🌊" },
-  { id: "volcano", label: "Volcanic Eruption", icon: "🌋" },
-  { id: "outbreak", label: "Outbreak", icon: "☣️" },
-  { id: "accident", label: "Major Accident", icon: "💥" },
-  { id: "conflict", label: "Armed Conflict", icon: "🛡️" },
-  { id: "other", label: "Other Hazard", icon: "⚠️" }
-];
-
-const SEVERITIES = [
-  { id: "low", label: "Low", color: "#06b6d4" },
-  { id: "moderate", label: "Moderate", color: "#eab308" },
-  { id: "high", label: "High", color: "#f97316" },
-  { id: "critical", label: "Critical", color: "#ef4444" }
-];
-
-function escapeHtml(val) {
-  return String(val ?? "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
-  }[c]));
-}
-
-function getReporterKey() {
-  const storageKey = "calamitytracker:reporter-key";
-  let saved = localStorage.getItem(storageKey);
-  if (!saved) {
-    saved = crypto.randomUUID();
-    localStorage.setItem(storageKey, saved);
-  }
-  return saved;
-}
-
-const BLANK_REPORT = {
-  type: "flood",
-  severity: "moderate",
-  description: "",
-  newsUrl: "",
-  coordinates: null,
-  accuracy: null
-};
+import { API, getReporterKey, BLANK_REPORT, escapeHtml } from "../utils/constants.js";
+import TopBar from "../components/TopBar.jsx";
+import IntelligenceDrawer from "../components/IntelligenceDrawer.jsx";
+import ReportModal from "../components/ReportModal.jsx";
 
 export default function Map() {
   const container = useRef(null);
@@ -70,7 +25,7 @@ export default function Map() {
   const [sseConnected, setSseConnected] = useState(false);
 
   // UI Controls
-  const [activeDrawerTab, setActiveDrawerTab] = useState("incidents"); // 'incidents' | 'community' | 'my_reports'
+  const [activeDrawerTab, setActiveDrawerTab] = useState("incidents");
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportForm, setReportForm] = useState(BLANK_REPORT);
@@ -81,7 +36,6 @@ export default function Map() {
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch Incidents Feed
   const loadIncidents = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/incidents?status=candidate,active&limit=200`);
@@ -95,7 +49,6 @@ export default function Map() {
     }
   }, []);
 
-  // Fetch Public Community Reports
   const loadCommunityReports = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/reports?limit=100`);
@@ -107,7 +60,6 @@ export default function Map() {
     }
   }, []);
 
-  // Fetch My Submissions
   const loadMyReports = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/reports/mine`, {
@@ -121,7 +73,6 @@ export default function Map() {
     }
   }, []);
 
-  // Refresh All Data
   const refreshAll = useCallback(() => {
     loadIncidents();
     loadCommunityReports();
@@ -143,14 +94,11 @@ export default function Map() {
 
     refreshAll();
 
-    // Setup SSE Stream
     let stream;
     try {
       stream = new EventSource(`${API}/api/events/incidents`);
 
-      stream.addEventListener("connected", () => {
-        setSseConnected(true);
-      });
+      stream.addEventListener("connected", () => setSseConnected(true));
 
       stream.addEventListener("incident.created", (e) => {
         refreshAll();
@@ -162,22 +110,14 @@ export default function Map() {
         }
       });
 
-      stream.addEventListener("incident.updated", () => {
-        refreshAll();
-      });
-
-      stream.addEventListener("report.corroborating", () => {
-        loadCommunityReports();
-      });
-
+      stream.addEventListener("incident.updated", () => refreshAll());
+      stream.addEventListener("report.corroborating", () => loadCommunityReports());
       stream.addEventListener("report.corroborated", () => {
         loadCommunityReports();
         toast.success("Community report corroborated nearby!");
       });
 
-      stream.onerror = () => {
-        setSseConnected(false);
-      };
+      stream.onerror = () => setSseConnected(false);
     } catch (err) {
       console.warn("SSE Setup failed:", err);
     }
@@ -199,7 +139,6 @@ export default function Map() {
         setIsPickingLocation(false);
         toast.success(`Location set to [${coordinates[1]}°, ${coordinates[0]}°]`);
 
-        // Update pin marker on map
         if (!reportPinMarker.current) {
           const el = document.createElement("div");
           el.className = "report-pin-marker";
@@ -234,7 +173,6 @@ export default function Map() {
       if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
       const isActive = incident.status === "active";
-
       const markerEl = document.createElement("div");
       markerEl.className = `custom-incident-marker ${isActive ? "active" : "candidate"} ${incident.severity || "moderate"}`;
       markerEl.innerHTML = `<span class="marker-pulse"></span><span class="marker-core"></span>`;
@@ -313,14 +251,12 @@ export default function Map() {
     });
   }, [communityReports]);
 
-  // Fly to Coordinate on Map
   function flyToIncident(coords) {
     if (coords && map.current) {
       map.current.flyTo({ center: coords, zoom: 8.5, speed: 1.2 });
     }
   }
 
-  // Get User GPS Location
   function useGpsLocation() {
     if (!navigator.geolocation) {
       toast.error("Geolocation is not supported by your browser");
@@ -343,7 +279,6 @@ export default function Map() {
     );
   }
 
-  // Submit Community Report
   async function handleReportSubmit(e) {
     e.preventDefault();
     if (!reportForm.coordinates) {
@@ -393,7 +328,6 @@ export default function Map() {
     }
   }
 
-  // Corroborate Existing Report Action
   async function handleCorroborate(reportId) {
     try {
       if (!navigator.geolocation) throw new Error("Location is required to corroborate a report");
@@ -430,73 +364,22 @@ export default function Map() {
 
   return (
     <div className="tracker-root">
-      {/* Map Canvas */}
       <div
         ref={container}
         className={`map-viewport ${isPickingLocation ? "cursor-crosshair" : ""}`}
       />
 
-      {/* Modern Glassmorphic Top Bar */}
-      <header className="tracker-topbar">
-        <div className="brand-section">
-          <div className="logo-badge">
-            <span className="logo-flame">⚡</span>
-          </div>
-          <div>
-            <div className="topbar-tagline">
-              <span className={`live-pulse-dot ${sseConnected ? "online" : "connecting"}`} />
-              {sseConnected ? "LIVE INTELLIGENCE STREAM" : "CONNECTING TO FEED..."}
-            </div>
-            <h1 className="brand-title">Calamity Tracker</h1>
-          </div>
-        </div>
+      <TopBar
+        sseConnected={sseConnected}
+        filterType={filterType}
+        setFilterType={setFilterType}
+        filterSeverity={filterSeverity}
+        setFilterSeverity={setFilterSeverity}
+        setReportModalOpen={setReportModalOpen}
+        drawerOpen={drawerOpen}
+        setDrawerOpen={setDrawerOpen}
+      />
 
-        {/* Filters & Actions */}
-        <div className="topbar-actions">
-          <div className="filter-chip-group">
-            <select
-              className="glass-select"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-            >
-              {CALAMITY_TYPES.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.icon} {t.label}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className="glass-select"
-              value={filterSeverity}
-              onChange={(e) => setFilterSeverity(e.target.value)}
-            >
-              <option value="all">All Severities</option>
-              {SEVERITIES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            className="btn-action btn-report"
-            onClick={() => setReportModalOpen(true)}
-          >
-            📢 Flag Calamity
-          </button>
-
-          <button
-            className={`btn-action btn-drawer-toggle ${drawerOpen ? "active" : ""}`}
-            onClick={() => setDrawerOpen(!drawerOpen)}
-          >
-            {drawerOpen ? "Hide Panel ✕" : "Feed & Signals ☰"}
-          </button>
-        </div>
-      </header>
-
-      {/* Floating Status & Legend Pill */}
       <div className="map-floating-legend">
         <span className="legend-item">
           <span className="dot active-dot" /> Verified Active ({incidents.filter((i) => i.status === "active").length})
@@ -509,274 +392,29 @@ export default function Map() {
         </span>
       </div>
 
-      {/* Sliding Intelligence Drawer */}
       {drawerOpen && (
-        <aside className="intelligence-drawer">
-          <div className="drawer-tab-bar">
-            <button
-              className={`drawer-tab ${activeDrawerTab === "incidents" ? "active" : ""}`}
-              onClick={() => setActiveDrawerTab("incidents")}
-            >
-              Incidents ({incidents.length})
-            </button>
-            <button
-              className={`drawer-tab ${activeDrawerTab === "community" ? "active" : ""}`}
-              onClick={() => setActiveDrawerTab("community")}
-            >
-              Community Pulse ({communityReports.length})
-            </button>
-            <button
-              className={`drawer-tab ${activeDrawerTab === "my_reports" ? "active" : ""}`}
-              onClick={() => setActiveDrawerTab("my_reports")}
-            >
-              My Reports ({myReports.length})
-            </button>
-          </div>
-
-          <div className="drawer-content">
-            {/* Tab 1: Incidents Feed */}
-            {activeDrawerTab === "incidents" && (
-              <div className="card-list">
-                {incidents.length === 0 ? (
-                  <div className="empty-state">No incidents currently match your filter.</div>
-                ) : (
-                  incidents.map((incident) => (
-                    <article
-                      key={incident.id}
-                      className="incident-feed-card"
-                      onClick={() => flyToIncident(incident.location?.coordinates, incident)}
-                    >
-                      <div className="card-header">
-                        <span className="calamity-type-badge">
-                          {incident.type?.toUpperCase()}
-                        </span>
-                        <span className={`badge severity ${incident.severity}`}>
-                          {incident.severity}
-                        </span>
-                      </div>
-                      <p className="card-summary">{incident.summary}</p>
-                      <div className="card-footer">
-                        <span>📍 {incident.locationName || "Region"}</span>
-                        <span>🎯 {Math.round((incident.confidenceScore || 0) * 100)}% conf</span>
-                      </div>
-                    </article>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* Tab 2: Community Pulse */}
-            {activeDrawerTab === "community" && (
-              <div className="card-list">
-                <p className="section-hint">
-                  Citizen reports are private signals until corroborated by 3 nearby observers.
-                </p>
-                {communityReports.length === 0 ? (
-                  <div className="empty-state">No pending community reports.</div>
-                ) : (
-                  communityReports.map((report) => (
-                    <article key={report.id} className="community-feed-card">
-                      <div className="card-header">
-                        <span className="calamity-type-badge community">
-                          👥 {report.type?.toUpperCase()}
-                        </span>
-                        <span className="corroboration-meter">
-                          {report.corroborationCount}/3 Confirmed
-                        </span>
-                      </div>
-                      <p className="card-description">"{report.description}"</p>
-                      <div className="corroboration-progress">
-                        <div
-                          className="progress-bar-fill"
-                          style={{
-                            width: `${Math.min((report.corroborationCount / 3) * 100, 100)}%`
-                          }}
-                        />
-                      </div>
-                      <div className="community-actions">
-                        <button
-                          className="btn-corroborate"
-                          onClick={() => handleCorroborate(report.id)}
-                        >
-                          👍 I See This Too (Corroborate)
-                        </button>
-                        <button
-                          className="btn-locate"
-                          onClick={() => flyToIncident(report.location?.coordinates, null)}
-                        >
-                          View Area
-                        </button>
-                      </div>
-                    </article>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* Tab 3: My Submissions */}
-            {activeDrawerTab === "my_reports" && (
-              <div className="card-list">
-                {myReports.length === 0 ? (
-                  <div className="empty-state">
-                    You haven't submitted any reports from this device yet.
-                  </div>
-                ) : (
-                  myReports.map((myRep) => (
-                    <article key={myRep.id} className="my-report-card">
-                      <div className="card-header">
-                        <strong>{myRep.type?.toUpperCase()}</strong>
-                        <span className={`badge ${myRep.status}`}>
-                          {myRep.status === "attached_to_incident" ? "Verified & Attached" : myRep.status}
-                        </span>
-                      </div>
-                      <p className="card-summary">{myRep.description}</p>
-                      <div className="card-footer">
-                        <small>Submitted: {new Date(myRep.createdAt).toLocaleString()}</small>
-                        <small>Corroborations: {myRep.corroborationCount}</small>
-                      </div>
-                    </article>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        </aside>
+        <IntelligenceDrawer
+          activeDrawerTab={activeDrawerTab}
+          setActiveDrawerTab={setActiveDrawerTab}
+          incidents={incidents}
+          communityReports={communityReports}
+          myReports={myReports}
+          flyToIncident={flyToIncident}
+          handleCorroborate={handleCorroborate}
+        />
       )}
 
-      {/* Citizen Report Modal */}
       {reportModalOpen && (
-        <div className="modal-backdrop" onClick={() => setReportModalOpen(false)}>
-          <div className="modal-container glass-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <span className="eyebrow-tag">COMMUNITY CITIZEN SIGNAL</span>
-                <h2>Report a Disaster Event</h2>
-              </div>
-              <button
-                className="btn-close-modal"
-                onClick={() => setReportModalOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleReportSubmit} className="report-form">
-              <div className="form-row-2">
-                <label className="form-group">
-                  <span>Calamity Type</span>
-                  <select
-                    value={reportForm.type}
-                    onChange={(e) => setReportForm({ ...reportForm, type: e.target.value })}
-                  >
-                    {CALAMITY_TYPES.filter((t) => t.id !== "all").map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.icon} {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="form-group">
-                  <span>Estimated Severity</span>
-                  <select
-                    value={reportForm.severity}
-                    onChange={(e) => setReportForm({ ...reportForm, severity: e.target.value })}
-                  >
-                    {SEVERITIES.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <label className="form-group">
-                <span>What are you directly observing? (10 - 1000 chars)</span>
-                <textarea
-                  required
-                  minLength={10}
-                  maxLength={1000}
-                  placeholder="Describe rising water levels, smoke plumes, roadblocks, or damage without personal identifiable info..."
-                  value={reportForm.description}
-                  onChange={(e) => setReportForm({ ...reportForm, description: e.target.value })}
-                />
-              </label>
-
-              <label className="form-group">
-                <span>Evidence Link / News URL (Optional)</span>
-                <input
-                  type="url"
-                  placeholder="https://news.local/article"
-                  value={reportForm.newsUrl}
-                  onChange={(e) => setReportForm({ ...reportForm, newsUrl: e.target.value })}
-                  style={{
-                    background: "rgba(30, 41, 59, 0.8)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    borderRadius: "10px",
-                    padding: "10px 14px",
-                    color: "#fff",
-                    fontFamily: "var(--font-body)",
-                    fontSize: "0.88rem"
-                  }}
-                />
-              </label>
-
-              <div className="location-picker-section">
-                <span>Incident Pinpoint Location</span>
-                <div className="location-btn-row">
-                  <button
-                    type="button"
-                    className={`btn-location-mode ${isPickingLocation ? "active" : ""}`}
-                    onClick={() => {
-                      setIsPickingLocation(true);
-                      toast.info("Click anywhere on the map to set the pinpoint coordinates.");
-                    }}
-                  >
-                    📍 {reportForm.coordinates ? "Pin Selected: Click to Change" : "Click on Map to Place Pin"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn-gps"
-                    onClick={useGpsLocation}
-                  >
-                    📡 Use My GPS Location
-                  </button>
-                </div>
-
-                {reportForm.coordinates && (
-                  <div className="coordinates-indicator">
-                    ✓ Coordinates: [{reportForm.coordinates[1]}°, {reportForm.coordinates[0]}°]
-                    {reportForm.accuracy && ` (±${reportForm.accuracy}m accuracy)`}
-                  </div>
-                )}
-              </div>
-
-              <div className="modal-footer">
-                <p className="privacy-notice">
-                  🔒 Citizen exact locations are never published. Only aggregated cluster centroids are exposed to map viewers.
-                </p>
-                <div className="modal-btn-row">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => setReportModalOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={submitting || !reportForm.coordinates}
-                  >
-                    {submitting ? "Submitting Signal..." : "Submit Incident Report"}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ReportModal
+          setReportModalOpen={setReportModalOpen}
+          reportForm={reportForm}
+          setReportForm={setReportForm}
+          handleReportSubmit={handleReportSubmit}
+          isPickingLocation={isPickingLocation}
+          setIsPickingLocation={setIsPickingLocation}
+          useGpsLocation={useGpsLocation}
+          submitting={submitting}
+        />
       )}
 
       {loading && (

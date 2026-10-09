@@ -10,7 +10,7 @@ export function streamIncidentEvents(req, res) {
   res.write(`event: connected\ndata: {"ok":true}\n\n`);
 
   const unsubscribe = subscribeToIncidentEvents((event) => {
-    res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    res.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
   });
   const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 25000);
 

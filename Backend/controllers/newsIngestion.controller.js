@@ -10,8 +10,7 @@ export async function ingestNewsNow(req, res) {
     });
   } catch (error) {
     res.status(500).json({
-      message: "News ingestion failed",
-      error: error.message
+      message: "News ingestion failed"
     });
   }
 }

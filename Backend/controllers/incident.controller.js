@@ -30,8 +30,7 @@ export async function createIncident(req, res) {
     console.error("Incident creation failed:", error.message);
 
     return res.status(500).json({
-      message: "Incident creation failed",
-      error: error.message
+      message: "Incident creation failed"
     });
   }
 }

@@ -232,9 +232,9 @@ Health, routing chain, and circuit-breaker status of configured AI providers.
 - **Response `200 OK`**:
 ```json
 {
-  "routingChain": ["gemini", "openai", "mock"],
+  "routingChain": ["groq-primary", "groq-fallback-1"],
   "providers": {
-    "gemini": { "available": true, "cooldownTtl": 0, "status": "healthy" },
+    "groq-primary": { "available": true, "cooldownTtl": 0, "status": "healthy" },
     "openai": { "available": true, "cooldownTtl": 0, "status": "healthy" },
     "mock": { "available": true, "cooldownTtl": 0, "status": "healthy" }
   }

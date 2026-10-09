@@ -21,6 +21,7 @@ async function startWorker() {
   const [
     { Worker },
     queueModule,
+    { default: RawArticle },
     { ingestNews },
     { processArticleById, processPendingBatch },
     { createIncidentFromExtraction },
@@ -29,6 +30,7 @@ async function startWorker() {
   ] = await Promise.all([
     import("bullmq"),
     import("../queues/pipeline.queues.js"),
+    import("../models/rawArticle.model.js"),
     import("../services/newsIngestion.service.js"),
     import("../services/aiProcessing.service.js"),
     import("../services/incidentCreation.service.js"),
@@ -74,9 +76,14 @@ async function startWorker() {
   );
 
   const newsCounts = await newsIngestionQueue.getJobCounts("waiting", "active");
-  if (newsCounts.waiting === 0 && newsCounts.active === 0) {
-    console.log("Enqueueing initial news ingestion job to run immediately...");
-    await newsIngestionQueue.add("ingest-news", {}, { jobId: "initial-ingest-news" });
+  const databaseIsEmpty = (await RawArticle.exists({})) === null;
+  const shouldBootstrapNews = process.env.NEWS_BOOTSTRAP_ENABLED !== "false";
+  if (shouldBootstrapNews && (databaseIsEmpty || (newsCounts.waiting === 0 && newsCounts.active === 0))) {
+    // A completed BullMQ job retains its ID for a day. A unique ID is required
+    // here so a worker restart in the same hour actually performs a fresh fetch.
+    const bootstrapId = `bootstrap-ingest-${Date.now()}`;
+    console.log(`Enqueueing bootstrap news ingestion job (${databaseIsEmpty ? "empty database" : "worker startup"})...`);
+    await newsIngestionQueue.add("ingest-news", {}, { jobId: bootstrapId });
   }
 
   const aiCounts = await aiProcessingQueue.getJobCounts("waiting", "active");

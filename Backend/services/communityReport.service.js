@@ -44,8 +44,8 @@ export function validateCommunityReport(input) {
   const value = input || {};
   const coordinates = value.location?.coordinates;
 
-  if (!value.clientReportId || String(value.clientReportId).length > 128) {
-    return "clientReportId is required and must be under 128 characters";
+  if (!/^[a-zA-Z0-9-]{16,128}$/.test(String(value.clientReportId || ""))) {
+    return "clientReportId must be a 16-128 character UUID-like identifier";
   }
   if (!allowedTypes.includes(value.type)) {
     return `Unsupported incident type: ${value.type}`;
@@ -64,6 +64,9 @@ export function validateCommunityReport(input) {
   }
   if (Number.isNaN(new Date(value.occurredAt).getTime())) {
     return "occurredAt must be a valid date/time";
+  }
+  if (new Date(value.occurredAt).getTime() > Date.now() + 5 * 60 * 1000) {
+    return "occurredAt cannot be in the future";
   }
   return null;
 }
@@ -226,11 +229,16 @@ export async function corroborateCommunityReport({ reportId, reporterKey, locati
     throw new Error("You have already corroborated this report");
   }
 
+  const coordinates = location?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length !== 2 || !coordinates.every(Number.isFinite) || coordinates[0] < -180 || coordinates[0] > 180 || coordinates[1] < -90 || coordinates[1] > 90) {
+    throw new Error("A valid corroboration location is required");
+  }
+
   report.corroborations.push({
     reporterHash,
     corroboratedAt: new Date(),
     comment: comment?.trim() || null,
-    location: location ? { type: "Point", coordinates: location.coordinates } : null
+    location: { type: "Point", coordinates }
   });
   report.corroborationCount = report.corroborations.length;
 

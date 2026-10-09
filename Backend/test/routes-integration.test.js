@@ -27,6 +27,22 @@ test("GET /api/admin/queues returns queue health status", async () => {
   });
 });
 
+test("admin endpoints reject a missing or incorrect admin key when configured", async () => {
+  const previousKey = process.env.ADMIN_API_KEY;
+  process.env.ADMIN_API_KEY = "test-admin-secret";
+  try {
+    await withServer(async (baseUrl) => {
+      const rejected = await fetch(`${baseUrl}/api/admin/queues`);
+      assert.equal(rejected.status, 401);
+      const accepted = await fetch(`${baseUrl}/api/admin/queues`, { headers: { "X-Admin-Key": "test-admin-secret" } });
+      assert.equal(accepted.status, 200);
+    });
+  } finally {
+    if (previousKey === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = previousKey;
+  }
+});
+
 test("GET /api/admin/ai/providers returns AI routing chain and providers status", async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/admin/ai/providers`);

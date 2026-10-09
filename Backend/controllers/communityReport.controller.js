@@ -27,6 +27,7 @@ export async function submitCommunityReport(req, res) {
     }
 
     const reporterKey = req.get("X-Reporter-Key") || req.ip;
+    if (String(reporterKey).length > 128) return res.status(400).json({ message: "Invalid reporter identifier" });
     const result = await createCommunityReport(req.body, reporterKey);
 
     return res.status(result.idempotent ? 200 : 201).json({
@@ -76,6 +77,7 @@ export async function corroborateReport(req, res) {
     const { id } = req.params;
     const { location, comment } = req.body || {};
     const reporterKey = req.get("X-Reporter-Key") || req.ip;
+    if (String(reporterKey).length > 128) return res.status(400).json({ message: "Invalid reporter identifier" });
 
     const rate = await consumeRateLimit({
       key: `rate:community-corroborate:${req.ip}`,

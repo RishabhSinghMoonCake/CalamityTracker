@@ -8,6 +8,9 @@ function todayKey() {
 }
 
 function parseRetrySeconds(error) {
+  if (Number.isFinite(error?.retryAfterSeconds) && error.retryAfterSeconds > 0) {
+    return Math.ceil(error.retryAfterSeconds);
+  }
   const message = String(error?.message || "");
   const match = message.match(/retry in\s+(\d+(?:\.\d+)?)s/i);
   return match ? Math.ceil(Number(match[1])) : 0;
@@ -44,7 +47,9 @@ export async function checkProviderAvailability(provider = "gemini") {
 
 export async function activateProviderCooldown(provider = "gemini", error = null, customSeconds = null) {
   const providerRetry = parseRetrySeconds(error);
-  const configured = customSeconds ?? Number(process.env.AI_RATE_LIMIT_COOLDOWN_SECONDS || 86400);
+  // Groq supplies retry-after for short quota windows. A one-day default turns a
+  // transient 429 into an unnecessary pipeline outage.
+  const configured = customSeconds ?? Number(process.env.AI_RATE_LIMIT_COOLDOWN_SECONDS || 60);
   const seconds = Math.max(providerRetry, configured);
 
   try {
@@ -91,7 +96,7 @@ export async function activateAiCooldown(error) {
   return activateProviderCooldown("gemini", error);
 }
 
-export async function getProvidersHealthStatus(providers = ["gemini", "openai", "mock"]) {
+export async function getProvidersHealthStatus(providers = ["groq-primary", "groq-fallback-1"]) {
   const status = {};
   for (const provider of providers) {
     const avail = await checkProviderAvailability(provider);
@@ -103,4 +108,3 @@ export async function getProvidersHealthStatus(providers = ["gemini", "openai", 
   }
   return status;
 }
-

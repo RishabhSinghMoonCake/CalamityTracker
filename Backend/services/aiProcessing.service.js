@@ -1,7 +1,6 @@
 import RawArticle from "../models/rawArticle.model.js";
 import AiExtraction from "../models/aiExtraction.model.js";
 import { aiRouter, parseExtraction } from "./aiRouter.service.js";
-import { isQuotaError, activateProviderCooldown } from "./aiQuota.service.js";
 
 export { parseExtraction };
 
@@ -83,17 +82,15 @@ export async function processNextPendingArticle(rawArticleId = null) {
       fallbackReason
     };
   } catch (error) {
-    if (isQuotaError(error)) {
-      await activateProviderCooldown("gemini", error);
+    if (error.allProvidersUnavailable) {
       article.status = "pending";
-      article.lastError = `AI provider quota exhausted: ${error.message}`;
+      article.lastError = `AI providers unavailable: ${error.message}`;
       await article.save();
 
       return {
         processed: false,
         articleId: article._id.toString(),
-        reason: "provider_quota",
-        error: error.message
+        reason: "providers_unavailable"
       };
     }
 

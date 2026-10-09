@@ -36,7 +36,7 @@ test("MockProvider correctly classifies disaster keywords", async () => {
   assert.equal(result.provider, "mock");
 });
 
-test("MultiAiRouter routes through fallback when primary fails or is mocked", async () => {
+test("MultiAiRouter permits mock only when it is explicitly configured", async () => {
   const router = new MultiAiRouter();
   const article = {
     title: "Earthquake of magnitude 6.2 reported",
@@ -45,9 +45,18 @@ test("MultiAiRouter routes through fallback when primary fails or is mocked", as
     publishedAt: new Date()
   };
 
-  // With mock in fallback, it should succeed
-  const result = await router.classify(article);
-  assert.ok(result.result.isDisaster);
-  assert.ok(result.provider);
-  assert.ok(result.executionTimeMs >= 0);
+  const previousPrimary = process.env.AI_PRIMARY_PROVIDER;
+  const previousFallbacks = process.env.AI_FALLBACK_PROVIDERS;
+  process.env.AI_PRIMARY_PROVIDER = "mock";
+  process.env.AI_FALLBACK_PROVIDERS = "";
+  try {
+    const result = await router.classify(article);
+    assert.equal(result.provider, "mock");
+    assert.ok(result.result.isDisaster);
+  } finally {
+    if (previousPrimary === undefined) delete process.env.AI_PRIMARY_PROVIDER;
+    else process.env.AI_PRIMARY_PROVIDER = previousPrimary;
+    if (previousFallbacks === undefined) delete process.env.AI_FALLBACK_PROVIDERS;
+    else process.env.AI_FALLBACK_PROVIDERS = previousFallbacks;
+  }
 });

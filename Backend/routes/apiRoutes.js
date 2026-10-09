@@ -46,6 +46,6 @@ apiRouter.get("/admin/ai/providers", getAiProvidersStatus);
 
 // Legacy database routes
 apiRouter.get("/get-calamities-db", getDisastersDB);
-apiRouter.post("/add-calamity-db", addDisasterDB);
+apiRouter.post("/admin/add-calamity-db", addDisasterDB);
 
 export default apiRouter;

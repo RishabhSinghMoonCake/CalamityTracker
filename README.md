@@ -6,7 +6,7 @@ An event-driven disaster intelligence platform that separates raw news evidence,
 
 ## Highlights
 
-- **Multi-AI Routing & Resilience**: Provider-agnostic classification engine with primary Google Gemini (`gemini-2.5-flash`), OpenAI-compatible failover (`gpt-4o-mini`, Groq `llama-3.3-70b`, Ollama), and deterministic fallback with Redis per-provider cooldown circuit breakers.
+- **Groq Routing & Resilience**: Two independently configured Groq API-key slots with Redis per-key cooldown circuit breakers, strict JSON validation, and no production mock fallback.
 - **Complete Citizen Community Feature**: Rate-limited, idempotent citizen reporting with privacy preservation (anonymized coordinates), crowd corroboration ("I can confirm this"), and automatic threshold promotion into candidate incidents.
 - **Redis Incident Cache & Pub/Sub Realtime Fanout**: Observable `X-Cache: HIT/MISS` headers, sub-millisecond cached responses, and cross-process SSE streaming across workers and API replicas.
 - **BullMQ Worker Pipeline**: Dedicated queues for `news-ingestion`, `ai-processing`, `incident-creation`, and `community-processing` with live queue monitoring APIs.
@@ -18,7 +18,7 @@ An event-driven disaster intelligence platform that separates raw news evidence,
 ## System Architecture
 
 ```text
-BullMQ Scheduler ──► NewsData API ──► RawArticle (Deduplicated) ──► Multi-AI Router (Gemini / OpenAI / Mock)
+BullMQ Scheduler ──► NewsData API ──► RawArticle (Deduplicated) ──► Groq Router (primary / fallback key)
                                                                            │
 Citizen Report ──► Corroboration Engine (Threshold: 3) ────────────────────┼──► Incident ──► Redis Cache ──► React Map
                                                                            │         │

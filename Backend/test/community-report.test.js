@@ -8,7 +8,7 @@ import {
 } from "../services/communityReport.service.js";
 
 const validReport = {
-  clientReportId: "test-report-1",
+  clientReportId: "test-report-000001",
   type: "flood",
   description: "Flood water has blocked the main road near the village.",
   severity: "high",

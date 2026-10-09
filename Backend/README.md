@@ -1,6 +1,6 @@
 # Calamity Tracker — Backend
 
-An event-driven backend for collecting disaster-related news, classifying it with Gemini, turning usable results into geocoded incident candidates, and serving those incidents to the map.
+An event-driven backend for collecting disaster-related news, classifying it with Groq, turning usable results into geocoded incident candidates, and serving those incidents to the map.
 
 ## What is implemented
 
@@ -8,7 +8,7 @@ An event-driven backend for collecting disaster-related news, classifying it wit
 BullMQ scheduler (Redis)
   -> NewsData API
   -> RawArticle (deduplicated source evidence)
-  -> targeted Gemini AI job
+  -> targeted Groq AI job (primary key, then fallback key)
   -> AiExtraction (auditable classification)
   -> cached Nominatim geocoding
   -> Incident (GeoJSON map record with evidence links)
@@ -22,7 +22,7 @@ The pipeline intentionally separates a source article from an incident. Several 
 
 - Node.js + Express 5
 - MongoDB + Mongoose
-- Gemini via `@google/genai`
+- Groq via its OpenAI-compatible HTTPS API
 - NewsData API
 - Nominatim/OpenStreetMap geocoding
 - Redis: incident-response cache and BullMQ job persistence
@@ -88,7 +88,7 @@ The suite uses Node's built-in test runner and covers:
 - liveness and readiness endpoint contracts;
 - NewsData normalization and URL-based deduplication;
 - ingestion upsert operations and reported metrics;
-- Gemini response parsing and validation;
+- Groq response parsing and validation;
 - deterministic incident-cache keys; and
 - a real Redis ping plus cache-version invalidation primitive.
 
@@ -121,8 +121,9 @@ MONGODB_KEY=mongodb://127.0.0.1:27017/calamitytracker
 NEWS_API_URL=https://newsdata.io/api/1/latest
 NEWS_API_KEY=replace_me
 
-GEMINI_API_KEY=replace_me
-AI_MODEL_NAME=gemini-2.5-flash
+GROQ_API_KEY=replace_me
+GROQ_API_KEY_FALLBACK_1=replace_me
+GROQ_MODEL=openai/gpt-oss-20b
 AI_PROMPT_VERSION=v2
 AI_MAX_ATTEMPTS=3
 AI_BATCH_SIZE=3
@@ -154,7 +155,7 @@ When `PIPELINE_AUTOMATION_ENABLED=true` and `npm run worker` is running:
 
 Jobs retry three times with exponential backoff. Completed jobs are retained for one day; failed jobs are retained for seven days.
 
-Gemini calls also use a Redis-backed daily budget and cooldown circuit breaker. A provider 429 returns the article to `pending`, pauses new AI calls, and avoids a retry storm.
+Each Groq key has a Redis-backed daily budget and cooldown circuit breaker. If both providers are unavailable, the article remains `pending` for the scheduled worker to retry.
 
 ## Data model
 
@@ -229,7 +230,7 @@ These endpoints are intentionally manual while the ingestion pipeline is being d
 | Method | Route | Purpose |
 | --- | --- | --- |
 | POST | `/api/admin/ingest-news` | Fetch NewsData results and upsert only unseen raw articles. |
-| POST | `/api/admin/process-one-article` | Send one eligible raw article to Gemini. |
+| POST | `/api/admin/process-one-article` | Send one eligible raw article through Groq failover. |
 | POST | `/api/admin/process-article-batch` | Process a bounded batch based on `AI_BATCH_SIZE`. |
 | POST | `/api/admin/create-incident` | Geocode and create/merge one incident from an AI extraction. |
 
@@ -254,7 +255,7 @@ Create an incident with:
 ## Assumptions
 
 - MongoDB and Redis are running before the API server or worker starts.
-- NewsData, Gemini, and Nominatim credentials/usage are controlled through environment variables and provider limits.
+- NewsData, Groq, and Nominatim credentials/usage are controlled through environment variables and provider limits.
 - Nominatim is appropriate for low-volume development use; use a production geocoding provider or self-hosted service before high-volume deployment.
 - AI output is a candidate signal, not verified public truth.
 - A report/extraction without trustworthy event geography is not eligible for a map incident.
@@ -278,7 +279,7 @@ Create an incident with:
 
 ## Important development notes
 
-- Do not call Gemini or geocoding services from the frontend.
+- Do not call Groq or geocoding services from the frontend.
 - Do not use `deleteMany()` to refresh incidents; retain evidence and history.
 - Never treat an AI classification as verified public information without an explicit status/review policy.
 - Coordinates are always `[longitude, latitude]`, not `[latitude, longitude]`.

@@ -5,7 +5,8 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Map.css";
 
-const API = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+// Same-origin by default: Nginx (production) and Vite (development) proxy /api.
+const API = import.meta.env.VITE_BACKEND_URL || "";
 
 const CALAMITY_TYPES = [
   { id: "all", label: "All Calamities", icon: "🌐" },
@@ -73,7 +74,6 @@ export default function Map() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportForm, setReportForm] = useState(BLANK_REPORT);
   const [isPickingLocation, setIsPickingLocation] = useState(false);
-  const [selectedIncident, setSelectedIncident] = useState(null);
 
   // Filters
   const [filterType, setFilterType] = useState("all");
@@ -156,7 +156,9 @@ export default function Map() {
         try {
           const data = JSON.parse(e.data);
           toast.info(`🚨 New Disaster Candidate: ${data.payload?.type || "Incident"} detected`);
-        } catch {}
+        } catch (error) {
+          console.warn("Could not parse incident event", error);
+        }
       });
 
       stream.addEventListener("incident.updated", () => {
@@ -230,9 +232,7 @@ export default function Map() {
       const [lng, lat] = incident.location?.coordinates || [];
       if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
-      const isCritical = incident.severity === "critical";
       const isActive = incident.status === "active";
-      const color = isActive ? "#ef4444" : isCritical ? "#f97316" : "#eab308";
 
       const markerEl = document.createElement("div");
       markerEl.className = `custom-incident-marker ${isActive ? "active" : "candidate"} ${incident.severity || "moderate"}`;
@@ -313,10 +313,9 @@ export default function Map() {
   }, [communityReports]);
 
   // Fly to Coordinate on Map
-  function flyToIncident(coords, incident) {
+  function flyToIncident(coords) {
     if (coords && map.current) {
       map.current.flyTo({ center: coords, zoom: 8.5, speed: 1.2 });
-      setSelectedIncident(incident);
     }
   }
 
@@ -395,13 +394,22 @@ export default function Map() {
   // Corroborate Existing Report Action
   async function handleCorroborate(reportId) {
     try {
+      if (!navigator.geolocation) throw new Error("Location is required to corroborate a report");
+      const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 60000
+      }));
       const res = await fetch(`${API}/api/reports/${reportId}/corroborate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Reporter-Key": getReporterKey()
         },
-        body: JSON.stringify({ comment: "Confirmed by community observer via live map." })
+        body: JSON.stringify({
+          comment: "Confirmed by community observer via live map.",
+          location: { coordinates: [position.coords.longitude, position.coords.latitude] }
+        })
       });
 
       const json = await res.json();

@@ -12,8 +12,7 @@ export async function processOneArticle(req, res) {
     console.error("AI processing failed:", error.message);
 
     res.status(500).json({
-      message: "AI processing failed",
-      error: error.message
+      message: "AI processing failed"
     });
   }
 }
@@ -27,8 +26,7 @@ export async function processArticleBatch(req, res) {
     console.error("AI batch processing failed:", error.message);
 
     return res.status(500).json({
-      message: "AI batch processing failed",
-      error: error.message
+      message: "AI batch processing failed"
     });
   }
 }

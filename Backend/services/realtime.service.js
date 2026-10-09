@@ -7,6 +7,7 @@ localEvents.setMaxListeners(1000);
 const REDIS_CHANNEL = "calamity:realtime-events";
 let redisSubscriber = null;
 let isSubscribed = false;
+let subscriptionPromise = null;
 
 /**
  * Initializes Redis Pub/Sub subscriber client if Redis is available.
@@ -14,7 +15,9 @@ let isSubscribed = false;
 async function ensureSubscriber() {
   if (isSubscribed || !redisClient?.isReady) return;
 
-  try {
+  if (subscriptionPromise) return subscriptionPromise;
+
+  subscriptionPromise = (async () => {
     redisSubscriber = redisClient.duplicate();
     await redisSubscriber.connect();
 
@@ -29,9 +32,11 @@ async function ensureSubscriber() {
 
     isSubscribed = true;
     console.log("Redis realtime pub/sub subscriber active on channel:", REDIS_CHANNEL);
-  } catch (error) {
+  })().catch((error) => {
     console.warn("Could not establish Redis subscriber; falling back to in-process events:", error.message);
-  }
+    redisSubscriber = null;
+  }).finally(() => { subscriptionPromise = null; });
+  return subscriptionPromise;
 }
 
 /**
@@ -39,19 +44,18 @@ async function ensureSubscriber() {
  * and emits locally.
  */
 export async function publishIncidentEvent(type, payload) {
-  const event = { type, payload, at: new Date().toISOString() };
-
-  // Always emit locally in the current process
-  localEvents.emit("incident", event);
-
-  // Cross-process broadcast via Redis Pub/Sub
+  const event = { id: null, type, payload, at: new Date().toISOString() };
   try {
     if (redisClient?.isReady) {
+      event.id = String(await redisClient.incr("calamity:realtime-event-id"));
       await redisClient.publish(REDIS_CHANNEL, JSON.stringify(event));
+      return;
     }
   } catch (err) {
     console.warn("Failed to publish event to Redis:", err.message);
   }
+  event.id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  localEvents.emit("incident", event);
 }
 
 /**

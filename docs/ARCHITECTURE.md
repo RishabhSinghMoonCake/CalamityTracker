@@ -21,9 +21,8 @@ graph TD
     subgraph Multi-AI Routing & Resilience Engine
         AiQueue -->|Job: process-article| AiRouter[Multi-AI Router]
         AiRouter -->|Check Circuit Breakers| RedisQuotas[(Redis Quota & Cooldown)]
-        AiRouter -->|Primary: Google GenAI| Gemini[Google Gemini 2.5 Flash]
-        AiRouter -.->|Auto-Failover on 429/Error| OpenAI[OpenAI / Groq / Fallback]
-        AiRouter -.->|Offline / Dev Fallback| Mock[Deterministic Classifier]
+        AiRouter -->|Primary| GroqPrimary[Groq primary API key]
+        AiRouter -.->|Auto-Failover on 429/Error| GroqFallback[Groq fallback API key]
         AiRouter -->|Strict JSON Contract| AiExtraction[(AiExtraction Collection)]
         AiExtraction -->|Mappable Disaster Candidate| IncQueue[BullMQ: incident-creation]
     end
@@ -55,7 +54,7 @@ graph TD
 1. **Evidence Immutability**:
    `RawArticle` records retain the pristine provider payload. AI extraction output never mutates or overwrites raw evidence.
 2. **Auditable Interpretations**:
-   Every `AiExtraction` records the provider (`gemini`, `openai`, `mock`), model name, prompt version, execution latency, and any failover reasons.
+   Every `AiExtraction` records the provider (`groq-primary` or `groq-fallback-1`), model name, prompt version, execution latency, and any failover reasons.
 3. **Candidate vs. Active Public Incidents**:
    Uncorroborated reports or initial AI extractions create `candidate` incidents. Only official verification or multi-citizen corroboration elevates status to `active`.
 4. **Citizen Privacy Guarantees**:
@@ -70,9 +69,8 @@ graph TD
 ### 3.1 Routing Architecture
 
 The AI layer decouples classification from any single vendor SDK:
-- **`GeminiProvider`**: Primary provider utilizing `@google/genai` (`gemini-2.5-flash`).
-- **`OpenAICompatibleProvider`**: Secondary / failover provider compatible with OpenAI (`gpt-4o-mini`), Groq (`llama-3.3-70b-versatile`), DeepSeek, OpenRouter, or local Ollama instances.
-- **`MockProvider`**: Deterministic rule-based classifier providing zero-token offline execution for local development and CI testing.
+- **`GroqProvider`**: OpenAI-compatible Groq client instantiated twice, once for each configured key slot.
+- **`MockProvider`**: Deterministic classifier available only when explicitly configured for local development or CI.
 
 ### 3.2 Failure Modes & Circuit Breaking
 
@@ -80,15 +78,15 @@ The AI layer decouples classification from any single vendor SDK:
 Incoming Article
        │
        ▼
-Check Gemini Cooldown (Redis) ──[Cooldown Active]──► Try Next Provider (OpenAI)
+Check primary Groq cooldown (Redis) ──[Cooldown Active]──► Try fallback Groq key
        │
   [Available]
        │
-Acquire Gemini Daily Quota ──[Quota Exhausted]──► Try Next Provider (OpenAI)
+Acquire primary-key daily quota ──[Quota Exhausted]──► Try fallback Groq key
        │
   [Allowed]
        │
-Call Gemini API ──[HTTP 429 / Quota Error]──► Set Redis Cooldown Key ──► Fallback to OpenAI
+Call Groq API ──[HTTP 429 / Quota Error]──► Set Redis Cooldown Key ──► Fallback Groq key
        │
    [Success]
        │
@@ -154,6 +152,6 @@ When an incident is created or updated, `incidents:cache-version` in Redis is at
 1. **Stateless API Instances**:
    Express HTTP instances run behind an Nginx or ALB load balancer. Because real-time SSE fanout is backed by Redis Pub/Sub, clients can connect to any API replica and receive broadcasts uniformly.
 2. **Dedicated Background Workers**:
-   Workers operate in separate containers/processes (`npm run worker`), consuming BullMQ jobs from Redis. Upstream rate limits (Nominatim 1 req/sec, Gemini daily budget) are strictly controlled at the worker concurrency boundary.
+   Workers operate in separate containers/processes (`npm run worker`), consuming BullMQ jobs from Redis. Upstream rate limits (Nominatim 1 req/sec and Groq per-key budgets) are controlled at the worker concurrency boundary.
 3. **GeoJSON Indexes**:
    All geospatial queries use spherical geometry (`$geometry` and `2dsphere` indexes). Coordinates adhere strictly to GeoJSON `[longitude, latitude]` order.

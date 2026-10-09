@@ -3,8 +3,8 @@ services:
     image: mongo:7.0
     container_name: calamity-mongodb
     restart: unless-stopped
-    ports:
-      - "27017:27017"
+    expose:
+      - "27017"
     volumes:
       - mongo_data:/data/db
     networks:
@@ -14,8 +14,8 @@ services:
     image: redis:7.2-alpine
     container_name: calamity-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     networks:
@@ -27,13 +27,16 @@ services:
       dockerfile: Dockerfile
     container_name: calamity-api
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       - PORT=8000
+      - MONGODB_URI=mongodb://mongodb:27017/calamitytracker
       - MONGODB_KEY=mongodb://mongodb:27017/calamitytracker
       - REDIS_URL=redis://redis:6379
       - PIPELINE_AUTOMATION_ENABLED=false
+      - NODE_ENV=production
+      - TRUST_PROXY=true
     env_file:
       - ./Backend/.env
     depends_on:
@@ -50,9 +53,11 @@ services:
     restart: unless-stopped
     command: ["node", "workers/worker.js"]
     environment:
+      - MONGODB_URI=mongodb://mongodb:27017/calamitytracker
       - MONGODB_KEY=mongodb://mongodb:27017/calamitytracker
       - REDIS_URL=redis://redis:6379
       - PIPELINE_AUTOMATION_ENABLED=true
+      - NODE_ENV=production
     env_file:
       - ./Backend/.env
     depends_on:

@@ -48,11 +48,13 @@ Create `.env` based on `.env.example`:
 | `PIPELINE_AUTOMATION_ENABLED` | Enables BullMQ cron ingestion | `true` (in production) |
 | `NEWS_INGESTION_CRON` | NewsData ingestion schedule | `0 */6 * * *` (every 6 hours) |
 | `AI_PROCESSING_CRON` | Batch AI processing schedule | `*/5 * * * *` (every 5 minutes) |
-| `AI_ROUTING_STRATEGY` | Strategy for Multi-AI router | `fallback` |
-| `AI_PRIMARY_PROVIDER` | Primary AI classifier | `gemini` |
-| `AI_FALLBACK_PROVIDERS` | Comma-separated fallback chain | `openai,mock` |
-| `GEMINI_API_KEY` | Google Gemini API credential | Required |
-| `OPENAI_API_KEY` | OpenAI / Groq API credential | Recommended for failover |
+| `AI_PRIMARY_PROVIDER` | Primary AI classifier | `groq-primary` |
+| `AI_FALLBACK_PROVIDERS` | Comma-separated fallback chain | `groq-fallback-1` |
+| `GROQ_API_KEY` | Primary Groq API credential | Required |
+| `GROQ_API_KEY_FALLBACK_1` | Fallback Groq API credential | Required |
+| `GROQ_MODEL` | Groq classifier model | `openai/gpt-oss-20b` |
+| `ADMIN_API_KEY` | Required secret for `/api/admin/*` | Required |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed web origins | Required |
 | `COMMUNITY_CONFIRMATION_THRESHOLD` | Reports required to promote | `3` |
 | `COMMUNITY_CLUSTER_RADIUS_METERS` | Proximity clustering radius | `5000` (meters) |
 | `INCIDENTS_CACHE_TTL_SECONDS` | Redis cache TTL for incident feed | `60` |
@@ -80,7 +82,7 @@ This boots:
 
 ```bash
 # Verify API process liveness
-curl http://localhost:8000/api/health
+docker compose exec api node -e "fetch('http://localhost:8000/api/health').then(r=>r.text()).then(console.log)"
 
 # Verify Database and Redis readiness
 curl http://localhost:8000/api/ready

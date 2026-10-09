@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  normalizeNewsResponses
+  normalizeNewsResponses,
+  fetchNews,
+  isRelevantNewsArticle
 } from "../services/disaster.service.js";
 import { ingestNews } from "../services/newsIngestion.service.js";
 
@@ -27,6 +29,11 @@ test("news normalization removes duplicate URLs and keeps provider evidence", ()
   assert.equal(normalized[0].country, "india");
   assert.equal(normalized[0].rawPayload.article_id, "provider-1");
   assert.equal(normalized[0].publishedAt.toISOString(), "2026-08-22T06:36:37.000Z");
+});
+
+test("news relevance gate drops unrelated search results before AI processing", () => {
+  assert.equal(isRelevantNewsArticle(article), true);
+  assert.equal(isRelevantNewsArticle({ title: "Government jobs and recruitment rules", description: "Court ruling on public hiring." }), false);
 });
 
 test("ingestion creates URL-based upserts and reports inserted versus known counts", async () => {
@@ -68,5 +75,15 @@ test("ingestion creates URL-based upserts and reports inserted versus known coun
   assert.deepEqual(
     receivedOperations[0].updateOne.update.$setOnInsert.rawPayload,
     article
+  );
+});
+
+test("news fetch fails when every upstream query fails so BullMQ can retry it", async () => {
+  await assert.rejects(
+    fetchNews({
+      queryList: ["flood"],
+      httpClient: { get: async () => { throw Object.assign(new Error("rate limited"), { response: { status: 429 } }); } }
+    }),
+    /News provider failed for every query/
   );
 });

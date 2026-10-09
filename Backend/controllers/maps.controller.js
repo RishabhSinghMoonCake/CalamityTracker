@@ -1,16 +1,19 @@
 import express from "express";
 import axios from "axios";
+import { consumeRateLimit } from "../services/rateLimit.service.js";
 
 export default async function addressCoordinates(req, res) {
   const address = req.query.address;
 
-  if (!address) {
+  if (!address || typeof address !== "string" || address.length > 200) {
     return res.status(400).json({
       error: "Address is required"
     });
   }
 
   try {
+    const rate = await consumeRateLimit({ key: `rate:maps:${req.ip}`, limit: 60, windowSeconds: 3600 });
+    if (!rate.allowed) return res.status(429).set("Retry-After", String(rate.retryAfterSeconds)).json({ error: "Too many map requests" });
     const response = await axios.get(
       "https://nominatim.openstreetmap.org/search",
       {
@@ -52,7 +55,7 @@ export async function getAutocompleteSuggestions(req, res) {
   const api = process.env.GOOGLE_MAPS_API_KEY;
   const query = req.query.address;
 
-  if (query.length < 3) {
+  if (typeof query !== "string" || query.length < 3 || query.length > 200) {
     return res.status(400).json({
       error: "Query must be at least 3 characters long"
     });
@@ -61,6 +64,8 @@ export async function getAutocompleteSuggestions(req, res) {
   const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${api}`;
 
   try {
+    const rate = await consumeRateLimit({ key: `rate:maps:${req.ip}`, limit: 60, windowSeconds: 3600 });
+    if (!rate.allowed) return res.status(429).set("Retry-After", String(rate.retryAfterSeconds)).json({ error: "Too many map requests" });
     const response = await axios.get(url);
     const { predictions } = response.data;
 
@@ -92,6 +97,9 @@ export async function distanceBetween(req, res) {
   const url = "https://maps.googleapis.com/maps/api/distancematrix/json";
 
   try {
+    if (String(origin).length > 200 || String(destination).length > 200) return res.status(400).json({ error: "Invalid address length" });
+    const rate = await consumeRateLimit({ key: `rate:maps:${req.ip}`, limit: 60, windowSeconds: 3600 });
+    if (!rate.allowed) return res.status(429).set("Retry-After", String(rate.retryAfterSeconds)).json({ error: "Too many map requests" });
     const response = await axios.get(url, {
       params: {
         origins: origin,

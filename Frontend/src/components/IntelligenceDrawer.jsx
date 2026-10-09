@@ -99,7 +99,7 @@ export default function IntelligenceDrawer({
                     </button>
                     <button
                       className="btn-locate"
-                      onClick={() => flyToIncident(report.location?.coordinates, null)}
+                      onClick={() => flyToIncident(report.location?.coordinates, "unverified")}
                     >
                       View Area
                     </button>

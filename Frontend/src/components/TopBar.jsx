@@ -9,7 +9,9 @@ export default function TopBar({
   setFilterSeverity,
   setReportModalOpen,
   drawerOpen,
-  setDrawerOpen
+  setDrawerOpen,
+  showUnverified,
+  setShowUnverified
 }) {
   return (
     <header className="tracker-topbar">
@@ -52,6 +54,15 @@ export default function TopBar({
               </option>
             ))}
           </select>
+
+          <label className="glass-toggle">
+            <input
+              type="checkbox"
+              checked={showUnverified}
+              onChange={(e) => setShowUnverified(e.target.checked)}
+            />
+            Show Unverified Signals
+          </label>
         </div>
 
         <button

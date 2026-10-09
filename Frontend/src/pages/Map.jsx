@@ -23,6 +23,7 @@ export default function Map() {
   const [myReports, setMyReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sseConnected, setSseConnected] = useState(false);
+  const [showUnverified, setShowUnverified] = useState(false);
 
   // UI Controls
   const [activeDrawerTab, setActiveDrawerTab] = useState("incidents");
@@ -235,6 +236,12 @@ export default function Map() {
     communityMarkers.current = [];
 
     communityReports.forEach((report) => {
+      // Verified/attached reports are natively drawn as Incidents on the main map.
+      if (report.status === "attached_to_incident" || report.verifiedByAdmin) return;
+      
+      // If the user hasn't toggled unverified signals on, don't draw them!
+      if (!showUnverified) return;
+
       const [lng, lat] = report.location?.coordinates || [];
       if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
@@ -264,11 +271,14 @@ export default function Map() {
 
       communityMarkers.current.push(marker);
     });
-  }, [communityReports]);
+  }, [communityReports, showUnverified]);
 
-  function flyToIncident(coords) {
+  function flyToIncident(coords, type) {
     if (coords && map.current) {
       map.current.flyTo({ center: coords, zoom: 8.5, speed: 1.2 });
+      if (type === "unverified" && !showUnverified) {
+        toast.info("Turn on 'Show Unverified Signals' toggle at the top to see the exact marker.");
+      }
     }
   }
 
@@ -393,6 +403,8 @@ export default function Map() {
         setReportModalOpen={setReportModalOpen}
         drawerOpen={drawerOpen}
         setDrawerOpen={setDrawerOpen}
+        showUnverified={showUnverified}
+        setShowUnverified={setShowUnverified}
       />
 
       <div className="map-floating-legend">

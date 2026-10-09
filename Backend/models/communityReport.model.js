@@ -57,4 +57,7 @@ const communityReportSchema = new mongoose.Schema(
 communityReportSchema.index({ location: "2dsphere" });
 communityReportSchema.index({ type: 1, status: 1, createdAt: -1 });
 
+// Auto-delete community reports 3 days (259200 seconds) after creation
+communityReportSchema.index({ createdAt: 1 }, { expireAfterSeconds: 259200 });
+
 export default mongoose.model("CommunityReport", communityReportSchema);

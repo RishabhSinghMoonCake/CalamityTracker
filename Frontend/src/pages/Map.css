@@ -511,14 +511,17 @@ body, html {
 
 /* Custom Map Markers */
 .custom-incident-marker {
-  position: relative;
+  position: absolute; /* Changed to absolute to prevent flex flow issues */
   width: 24px;
   height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   --marker-color: var(--accent-high);
+  will-change: transform;
 }
 
 .marker-core {
@@ -539,11 +542,14 @@ body, html {
 
 .marker-pulse {
   position: absolute;
+  top: -2px;
+  left: -2px;
   width: 28px;
   height: 28px;
   border-radius: 50%;
   animation: marker-pulse-anim 2s infinite ease-out;
   opacity: 0.6;
+  pointer-events: none;
 }
 
 .custom-incident-marker .marker-pulse { background: var(--marker-color); }
@@ -554,8 +560,11 @@ body, html {
 }
 
 .community-radar-marker {
+  position: absolute;
   width: 28px;
   height: 28px;
+  margin-left: -14px;
+  margin-top: -14px;
   background: rgba(139, 92, 246, 0.85);
   border: 2px solid #fff;
   border-radius: 50%;
@@ -565,11 +574,22 @@ body, html {
   font-size: 0.85rem;
   box-shadow: 0 0 16px rgba(139, 92, 246, 0.6);
   cursor: pointer;
+  will-change: transform;
 }
 
 .report-pin-marker {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  margin-left: -16px;
+  margin-top: -32px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
   font-size: 1.8rem;
+  line-height: 1;
   filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
+  will-change: transform;
 }
 
 /* Map Popups */

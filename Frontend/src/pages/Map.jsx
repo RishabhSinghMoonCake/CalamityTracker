@@ -85,9 +85,24 @@ export default function Map() {
     map.current = new maptilersdk.Map({
       container: container.current,
       style: maptilersdk.MapStyle.DATAVIZ.DARK,
-      geopolitics: "in",
       center: [78.9629, 20.5937],
       zoom: 3.8
+    });
+
+    map.current.on("style.load", () => {
+      // Enforce the Indian geopolitical view (Survey of India compliance)
+      // This absorbs LOC/LAC and Arunachal Pradesh into standard country borders
+      if (map.current.getLayer("Country border")) {
+        map.current.setFilter("Country border", [
+          "all",
+          ["==", "admin_level", 2],
+          ["==", "maritime", 0],
+          ["any", ["==", "disputed", 0], ["==", "claimed_by", "IN"]]
+        ]);
+      }
+      if (map.current.getLayer("Disputed border")) {
+        map.current.setLayoutProperty("Disputed border", "visibility", "none");
+      }
     });
 
     map.current.addControl(new maptilersdk.NavigationControl(), "bottom-right");

@@ -115,4 +115,7 @@ const incidentSchema = new mongoose.Schema(
 incidentSchema.index({ location: "2dsphere" });
 incidentSchema.index({ status: 1, lastUpdatedAt: -1 });
 
+// Automatically delete incidents 3 days (259200 seconds) after they are last updated
+incidentSchema.index({ lastUpdatedAt: 1 }, { expireAfterSeconds: 259200 });
+
 export default mongoose.model("Incident", incidentSchema);

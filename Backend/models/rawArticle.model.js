@@ -68,4 +68,7 @@ const rawArticleSchema = new mongoose.Schema(
   }
 );
 
+// Automatically delete raw news articles 3 days (259200 seconds) after publication
+rawArticleSchema.index({ publishedAt: 1 }, { expireAfterSeconds: 259200 });
+
 export default mongoose.model("RawArticle", rawArticleSchema);

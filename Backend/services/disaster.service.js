@@ -104,6 +104,12 @@ export async function fetchNews({ httpClient = axios, queryList = null } = {}) {
         break;
       } catch (error) {
         lastError = error;
+        console.error(`[fetchNews] Attempt ${attempt + 1} Error Details for "${query}":`, {
+           message: error.message,
+           status: error.response?.status,
+           data: error.response?.data,
+           code: error.code
+        });
         if (attempt < requestRetries) {
           console.warn(`[fetchNews] Waiting ${retryDelayMs}ms before retrying "${query}"`);
           await new Promise((resolve) => setTimeout(resolve, retryDelayMs));

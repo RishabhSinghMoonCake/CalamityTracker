@@ -19,6 +19,7 @@ const communityReportSchema = new mongoose.Schema(
     reporterHash: { type: String, required: true, index: true },
     type: { type: String, required: true, trim: true, lowercase: true },
     description: { type: String, required: true, trim: true, minlength: 10, maxlength: 1000 },
+    newsUrl: { type: String, trim: true, default: null, match: /^https?:\/\/.+/ },
     severity: { type: String, enum: ["low", "moderate", "high", "critical"], required: true },
     location: {
       type: { type: String, enum: ["Point"], required: true },

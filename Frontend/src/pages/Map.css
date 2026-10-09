@@ -2,13 +2,13 @@
   --bg-dark: #080c14;
   --panel-bg: rgba(15, 23, 42, 0.82);
   --panel-border: rgba(255, 255, 255, 0.1);
-  --accent-cyan: #06b6d4;
-  --accent-blue: #3b82f6;
-  --accent-critical: #ef4444;
-  --accent-high: #f97316;
-  --accent-moderate: #eab308;
-  --accent-low: #06b6d4;
-  --accent-community: #8b5cf6;
+  --accent-cyan: #10b981;
+  --accent-blue: #059669;
+  --accent-critical: #e11d48;
+  --accent-high: #ea580c;
+  --accent-moderate: #d97706;
+  --accent-low: #10b981;
+  --accent-community: #9333ea;
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
@@ -79,12 +79,12 @@ body, html {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #0ea5e9, #6366f1);
+  background: linear-gradient(135deg, #10b981, #059669);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1rem;
-  box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
 }
 
 .brand-title {
@@ -180,14 +180,14 @@ body, html {
 }
 
 .btn-report {
-  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  background: linear-gradient(135deg, #10b981, #059669);
   color: #fff;
-  box-shadow: 0 4px 18px rgba(14, 165, 233, 0.35);
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.35);
 }
 
 .btn-report:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 22px rgba(14, 165, 233, 0.5);
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.5);
 }
 
 .btn-drawer-toggle {
@@ -197,9 +197,9 @@ body, html {
 }
 
 .btn-drawer-toggle.active {
-  background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
-  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.4);
 }
 
 /* Floating Legend */
@@ -335,7 +335,7 @@ body, html {
 
 .incident-feed-card:hover {
   background: rgba(30, 41, 59, 0.9);
-  border-color: rgba(6, 182, 212, 0.4);
+  border-color: rgba(16, 185, 129, 0.4);
   transform: translateY(-2px);
 }
 
@@ -714,13 +714,13 @@ body, html {
 }
 
 .btn-location-mode {
-  background: rgba(14, 165, 233, 0.15);
-  color: #38bdf8;
-  border-color: rgba(14, 165, 233, 0.3);
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
 }
 
 .btn-location-mode.active {
-  background: #0284c7;
+  background: #059669;
   color: #fff;
 }
 
@@ -769,7 +769,7 @@ body, html {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  background: linear-gradient(135deg, #10b981, #059669);
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -778,7 +778,7 @@ body, html {
   font-size: 0.88rem;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
 }
 
 .btn-primary:disabled {

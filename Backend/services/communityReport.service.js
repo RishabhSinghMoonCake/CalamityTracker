@@ -68,6 +68,9 @@ export function validateCommunityReport(input) {
   if (new Date(value.occurredAt).getTime() > Date.now() + 5 * 60 * 1000) {
     return "occurredAt cannot be in the future";
   }
+  if (value.newsUrl && !/^https?:\/\/.+/.test(value.newsUrl)) {
+    return "newsUrl must be a valid HTTP/HTTPS URL";
+  }
   return null;
 }
 
@@ -87,6 +90,7 @@ export async function createCommunityReport(input, reporterKey) {
     reporterHash,
     type: input.type.toLowerCase(),
     description: input.description.trim(),
+    newsUrl: input.newsUrl?.trim() || null,
     severity: input.severity,
     location: { type: "Point", coordinates: input.location.coordinates },
     locationAccuracyMeters: input.locationAccuracyMeters ?? null,
@@ -183,7 +187,8 @@ export async function createCommunityReport(input, reporterKey) {
     evidenceReports: distinctReports.map((item) => item._id),
     communityReportCount: distinctReports.length,
     firstReportedAt: report.createdAt,
-    lastUpdatedAt: new Date()
+    lastUpdatedAt: new Date(),
+    expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
   });
 
   await CommunityReport.updateMany(
@@ -259,7 +264,8 @@ export async function corroborateCommunityReport({ reportId, reporterKey, locati
       evidenceReports: [report._id],
       communityReportCount: report.corroborationCount,
       firstReportedAt: report.createdAt,
-      lastUpdatedAt: new Date()
+      lastUpdatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
     });
 
     report.status = "attached_to_incident";

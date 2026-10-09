@@ -50,6 +50,7 @@ const BLANK_REPORT = {
   type: "flood",
   severity: "moderate",
   description: "",
+  newsUrl: "",
   coordinates: null,
   accuracy: null
 };
@@ -363,6 +364,7 @@ export default function Map() {
           type: reportForm.type,
           severity: reportForm.severity,
           description: reportForm.description,
+          newsUrl: reportForm.newsUrl || undefined,
           location: { coordinates: reportForm.coordinates },
           locationAccuracyMeters: reportForm.accuracy,
           occurredAt: new Date().toISOString()
@@ -698,6 +700,25 @@ export default function Map() {
                   placeholder="Describe rising water levels, smoke plumes, roadblocks, or damage without personal identifiable info..."
                   value={reportForm.description}
                   onChange={(e) => setReportForm({ ...reportForm, description: e.target.value })}
+                />
+              </label>
+
+              <label className="form-group">
+                <span>Evidence Link / News URL (Optional)</span>
+                <input
+                  type="url"
+                  placeholder="https://news.local/article"
+                  value={reportForm.newsUrl}
+                  onChange={(e) => setReportForm({ ...reportForm, newsUrl: e.target.value })}
+                  style={{
+                    background: "rgba(30, 41, 59, 0.8)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: "10px",
+                    padding: "10px 14px",
+                    color: "#fff",
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.88rem"
+                  }}
                 />
               </label>
 

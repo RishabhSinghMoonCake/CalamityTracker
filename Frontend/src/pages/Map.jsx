@@ -159,7 +159,7 @@ export default function Map() {
           const el = document.createElement("div");
           el.className = "report-pin-marker";
           el.innerHTML = "📍";
-          reportPinMarker.current = new maptilersdk.Marker({ element: el })
+          reportPinMarker.current = new maptilersdk.Marker({ element: el, anchor: "bottom" })
             .setLngLat(coordinates)
             .addTo(map.current);
         } else {
@@ -220,7 +220,7 @@ export default function Map() {
         </div>
       `;
 
-      const marker = new maptilersdk.Marker({ element: markerEl })
+      const marker = new maptilersdk.Marker({ element: markerEl, anchor: "center" })
         .setLngLat([lng, lat])
         .setPopup(new maptilersdk.Popup({ offset: 18 }).setHTML(popupHtml))
         .addTo(map.current);
@@ -264,7 +264,7 @@ export default function Map() {
         </div>
       `;
 
-      const marker = new maptilersdk.Marker({ element: markerEl })
+      const marker = new maptilersdk.Marker({ element: markerEl, anchor: "center" })
         .setLngLat([lng, lat])
         .setPopup(new maptilersdk.Popup({ offset: 18 }).setHTML(popupHtml))
         .addTo(map.current);

@@ -1,7 +1,15 @@
 import { createClient } from "redis";
 
+const isTls = (process.env.REDIS_URL || "").startsWith("rediss://");
+
 const redisClient = createClient({
-  url: process.env.REDIS_URL
+  url: process.env.REDIS_URL,
+  ...(isTls && {
+    socket: {
+      tls: true,
+      rejectUnauthorized: false
+    }
+  })
 });
 
 redisClient.on("error", (error) => {

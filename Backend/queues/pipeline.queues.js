@@ -1,18 +1,23 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 
-export const bullConnection = new IORedis(
-  process.env.REDIS_URL || "redis://127.0.0.1:6379",
-  {
-    maxRetriesPerRequest: null,
-    lazyConnect: true,
-    enableOfflineQueue: false,
-    retryStrategy(times) {
-      if (times > 3) return null; // stop reconnecting if Redis is not running
-      return Math.min(times * 100, 1000);
+const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+const isTls = redisUrl.startsWith("rediss://");
+
+export const bullConnection = new IORedis(redisUrl, {
+  maxRetriesPerRequest: null,
+  lazyConnect: true,
+  enableOfflineQueue: false,
+  ...(isTls && {
+    tls: {
+      rejectUnauthorized: false
     }
+  }),
+  retryStrategy(times) {
+    if (times > 3) return null; // stop reconnecting if Redis is not running
+    return Math.min(times * 100, 1000);
   }
-);
+});
 
 // Prevent unhandled error event crashes in environments without active Redis
 bullConnection.on("error", (err) => {

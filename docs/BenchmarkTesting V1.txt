@@ -1,0 +1,52 @@
+
+PS C:\Users\Lenovo\Documents\CalamityTracker> npx -y autocannon "http://localhost:3000/api/incidents?status=candidate,active&limit=17" -c 20 -d 10
+Running 10s test @ http://localhost:3000/api/incidents?status=candidate,active&limit=17
+20 connections
+
+
+┌─────────┬───────┬───────┬───────┬───────┬──────────┬─────────┬───────┐
+│ Stat    │ 2.5%  │ 50%   │ 97.5% │ 99%   │ Avg      │ Stdev   │ Max   │
+├─────────┼───────┼───────┼───────┼───────┼──────────┼─────────┼───────┤
+│ Latency │ 10 ms │ 12 ms │ 22 ms │ 27 ms │ 13.27 ms │ 4.23 ms │ 95 ms │
+└─────────┴───────┴───────┴───────┴───────┴──────────┴─────────┴───────┘
+┌───────────┬───────┬───────┬─────────┬─────────┬─────────┬─────────┬───────┐
+│ Stat      │ 1%    │ 2.5%  │ 50%     │ 97.5%   │ Avg     │ Stdev   │ Min   │
+├───────────┼───────┼───────┼─────────┼─────────┼─────────┼─────────┼───────┤
+│ Req/Sec   │ 951   │ 951   │ 1,541   │ 1,619   │ 1,452.8 │ 197.97  │ 951   │
+├───────────┼───────┼───────┼─────────┼─────────┼─────────┼─────────┼───────┤
+│ Bytes/Sec │ 14 MB │ 14 MB │ 22.7 MB │ 23.8 MB │ 21.4 MB │ 2.91 MB │ 14 MB │
+└───────────┴───────┴───────┴─────────┴─────────┴─────────┴─────────┴───────┘
+
+Req/Bytes counts sampled once per second.
+# of samples: 10
+
+15k requests in 10.04s, 214 MB read
+
+
+
+
+
+PS C:\Users\Lenovo\Documents\CalamityTracker> npx -y autocannon "http://localhost:3000/api/incidents?status=candidate,active&limit=17" -c 500 -d 30
+Running 30s test @ http://localhost:3000/api/incidents?status=candidate,active&limit=17
+500 connections
+
+
+┌─────────┬────────┬────────┬────────┬────────┬───────────┬──────────┬────────┐
+│ Stat    │ 2.5%   │ 50%    │ 97.5%  │ 99%    │ Avg       │ Stdev    │ Max    │
+├─────────┼────────┼────────┼────────┼────────┼───────────┼──────────┼────────┤
+│ Latency │ 149 ms │ 321 ms │ 431 ms │ 713 ms │ 322.75 ms │ 83.08 ms │ 919 ms │
+└─────────┴────────┴────────┴────────┴────────┴───────────┴──────────┴────────┘
+┌───────────┬────────┬────────┬─────────┬─────────┬──────────┬─────────┬────────┐
+│ Stat      │ 1%     │ 2.5%   │ 50%     │ 97.5%   │ Avg      │ Stdev   │ Min    │
+├───────────┼────────┼────────┼─────────┼─────────┼──────────┼─────────┼────────┤
+│ Req/Sec   │ 879    │ 879    │ 1,510   │ 2,129   │ 1,542.07 │ 246.3   │ 879    │
+├───────────┼────────┼────────┼─────────┼─────────┼──────────┼─────────┼────────┤
+│ Bytes/Sec │ 698 kB │ 698 kB │ 22.1 MB │ 27.7 MB │ 16.2 MB  │ 10.7 MB │ 698 kB │
+└───────────┴────────┴────────┴─────────┴─────────┴──────────┴─────────┴────────┘
+
+Req/Bytes counts sampled once per second.
+# of samples: 30
+
+28231 2xx responses, 18031 non 2xx responses
+47k requests in 30.13s, 486 MB read
+PS C:\Users\Lenovo\Documents\CalamityTracker>

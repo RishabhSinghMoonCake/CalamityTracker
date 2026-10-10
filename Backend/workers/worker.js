@@ -113,6 +113,16 @@ async function startWorker() {
     return true;
   }
 
+  // Worker optimization for serverless / metered Redis (e.g. Upstash):
+  // Throttle idle polling to avoid exhausting command quotas.
+  const sharedWorkerOptions = {
+    connection: bullConnection,
+    concurrency: 1,
+    drainDelay: Number(process.env.WORKER_DRAIN_DELAY_MS || 30000),      // wait 30s when queue is empty instead of ms polling
+    stalledInterval: Number(process.env.WORKER_STALLED_INTERVAL_MS || 300000), // check stalled jobs every 5m instead of 30s
+    lockDuration: Number(process.env.WORKER_LOCK_DURATION_MS || 120000)        // 2m lock duration
+  };
+
   // 1. News Ingestion Worker
   newsWorker = new Worker(
     "news-ingestion",
@@ -137,10 +147,7 @@ async function startWorker() {
         aiJobsEnqueued: aiJobs.length
       };
     },
-    {
-      connection: bullConnection,
-      concurrency: 1
-    }
+    sharedWorkerOptions
   );
 
   newsWorker.on("completed", (job, result) => {
@@ -179,8 +186,7 @@ async function startWorker() {
       throw new Error(`Unsupported AI job: ${job.name}`);
     },
     {
-      connection: bullConnection,
-      concurrency: 1,
+      ...sharedWorkerOptions,
       limiter: {
         max: 1,
         duration: 8000
@@ -212,10 +218,7 @@ async function startWorker() {
 
       return result;
     },
-    {
-      connection: bullConnection,
-      concurrency: 1
-    }
+    sharedWorkerOptions
   );
 
   incidentWorker.on("completed", (job, result) => {
@@ -239,7 +242,7 @@ async function startWorker() {
       throw new Error(`Unsupported community job: ${job.name}`);
     },
     {
-      connection: bullConnection,
+      ...sharedWorkerOptions,
       concurrency: 2
     }
   );

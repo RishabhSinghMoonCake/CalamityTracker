@@ -65,4 +65,7 @@ const geocodeCacheSchema = new mongoose.Schema(
 
 geocodeCacheSchema.index({ location: "2dsphere" });
 
+// Automatically expire cached geocoding results after 30 days (2592000 seconds)
+geocodeCacheSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2592000 });
+
 export default mongoose.model("GeocodeCache", geocodeCacheSchema);

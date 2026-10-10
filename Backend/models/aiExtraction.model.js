@@ -112,4 +112,7 @@ const aiExtractionSchema = new mongoose.Schema(
   }
 );
 
+// Automatically delete AI extractions 3 days (259200 seconds) after creation, aligned with raw articles
+aiExtractionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 259200 });
+
 export default mongoose.model("AiExtraction", aiExtractionSchema);

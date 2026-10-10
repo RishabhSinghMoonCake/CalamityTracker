@@ -118,9 +118,10 @@ async function startWorker() {
   const sharedWorkerOptions = {
     connection: bullConnection,
     concurrency: 1,
-    drainDelay: Number(process.env.WORKER_DRAIN_DELAY_MS || 30000),      // wait 30s when queue is empty instead of ms polling
-    stalledInterval: Number(process.env.WORKER_STALLED_INTERVAL_MS || 300000), // check stalled jobs every 5m instead of 30s
-    lockDuration: Number(process.env.WORKER_LOCK_DURATION_MS || 120000)        // 2m lock duration
+    drainDelay: Number(process.env.WORKER_DRAIN_DELAY_MS || 60000),      // wait 60s when queue is empty instead of ms polling
+    stalledInterval: Number(process.env.WORKER_STALLED_INTERVAL_MS || 600000), // check stalled jobs every 10m instead of 30s
+    lockDuration: Number(process.env.WORKER_LOCK_DURATION_MS || 120000),       // 2m lock duration
+    skipVersionCheck: true                                                     // save a Redis command on startup
   };
 
   // 1. News Ingestion Worker
